@@ -1,0 +1,29 @@
+# MusiGen backend requirements.
+# NOTE: install CUDA PyTorch FIRST and separately so it is not overwritten:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu128
+
+# --- Web / API ---
+fastapi>=0.115
+uvicorn[standard]>=0.30
+httpx>=0.27
+python-multipart>=0.0.9
+truststore>=0.9   # use the OS cert store (fixes HF downloads behind SSL interception)
+
+# --- YuE2 native runtime deps (torch installed separately, see above) ---
+transformers==4.57.6
+huggingface-hub==0.36.2
+safetensors==0.7.0
+tiktoken==0.12.0
+numpy==2.2.6
+soundfile==0.13.1
+accelerate==1.13.0
+
+# --- Cover-art image model (SD-Turbo via diffusers) + audio metadata tagging ---
+diffusers==0.36.0
+mutagen==1.47.0
+pillow>=10.0
+
+# The YuE2 engine itself. Installed with --no-deps in dev so it keeps our
+# CUDA torch build (the package pins torch==2.10.0; 2.11 is API-compatible):
+#   pip install "git+https://github.com/multimodal-art-projection/YuE.git" --no-deps
+# yue2-infer @ git+https://github.com/multimodal-art-projection/YuE.git

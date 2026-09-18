@@ -1,0 +1,40 @@
+# ---- Python ----
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# ---- Node / frontend ----
+node_modules/
+frontend/dist/
+frontend/node_modules/
+
+# ---- Runtime data & models (never commit — GBs) ----
+# dev data: audio, covers, db, hf-cache
+/data/
+# dev portable home
+/portable/
+/exports_ui/
+hf-cache/
+models--*/
+
+# ---- Build output ----
+installer/build/
+installer/dist/
+/build/
+/dist/
+
+# ---- Large vendored binaries (fetched at build time) ----
+installer/vendor/*.exe
+
+# ---- Reference material (not part of the app) ----
+ComfyUI Exemple/
+app_images/
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

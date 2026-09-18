@@ -8,6 +8,12 @@
 
 Generate complete songs — music *and* lyrics — on your own GPU, with a Napster/Winamp‑era player, striking Milkdrop visualizers, AI cover art, and a drag‑and‑drop "mixer". No cloud. No accounts. No telemetry. Everything lives in one portable folder.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-22d3ee.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Windows-11-a855f7.svg)](#-getting-started-portable-app)
+[![Runs local](https://img.shields.io/badge/AI-100%25%20local-f43f5e.svg)](#-how-it-works)
+[![Download](https://img.shields.io/badge/⬇%20Download-Releases-2ea44f.svg)](../../releases/latest)
+[![Buy Me A Coffee](https://img.shields.io/badge/☕%20Buy%20me%20a%20coffee-support-FFDD00.svg)](https://buymeacoffee.com/criso2hdj)
+
 <img src="docs/screenshots/visualizer.png" width="820" alt="MusiGen fullscreen Milkdrop visualizer" />
 
 </div>
@@ -105,6 +111,16 @@ cd ../installer && pyinstaller --noconfirm MusiGen.spec
 | **MusiGen** (this app) | — | MIT |
 
 > ⚠️ YuE2's model **weights are non‑commercial**. Respect each model's license for anything you release.
+
+The MusiGen application code is released under the [MIT License](LICENSE).
+
+## ☕ Support
+
+MusiGen is free and made for fun. If it brings you joy, you can support development here:
+
+<a href="https://buymeacoffee.com/criso2hdj" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="48" /></a>
+
+**→ [buymeacoffee.com/criso2hdj](https://buymeacoffee.com/criso2hdj)**
 
 ## 🙏 Credits
 

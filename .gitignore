@@ -38,3 +38,7 @@ Thumbs.db
 .idea/
 .vscode/
 *.log
+
+# Blender backup files
+*.blend1
+*.blend2

@@ -32,3 +32,12 @@ No additional GPU generation was needed for this UI/setup change.
 
 - App and Windows executable version: 0.0.2.
 - Permanent GitHub and Buy Me a Coffee links finish the Setup page.
+
+
+## Experimental vinyl-store build (codex/vinyl-store-3d)
+
+The same v0.0.2 executable now includes the embedded Blender-authored Neon Boutique,
+animated sleeve inspection, sliding turntable, vinyl extraction and playback-synced
+spinning/tonearm movement. It also includes the playlist playback scope correction.
+See STORE_3D.md for controls, the asset pipeline and validation limits. No push or
+release has been made. Native mouse capture still needs acceptance testing.

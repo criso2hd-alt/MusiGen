@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import {
   Play,
   Trash2,
@@ -19,6 +19,8 @@ import { Vinyl } from "../player/Vinyl";
 import { AlbumArt } from "../player/AlbumArt";
 import { PlaylistsPanel } from "../panels/PlaylistsPanel";
 import { LyricTimingButton } from "./LyricTimingButton";
+
+const RecordStore = lazy(() => import("./store3d/RecordStore"));
 
 function fmtTime(s: number) {
   if (!isFinite(s)) return "0:00";
@@ -280,6 +282,8 @@ function TracksPane() {
 }
 
 export function LibraryView() {
+  const view = usePreferences((s) => s.libraryView);
+  if (view === "records") return <div className="h-full p-3"><Suspense fallback={<div className="p-8">Loading record store…</div>}><RecordStore /></Suspense></div>;
   return (
     <div className="flex h-full gap-3 p-3">
       <aside className="glass w-44 lg:w-56 shrink-0 rounded-2xl">

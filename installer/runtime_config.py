@@ -1,0 +1,5 @@
+"""Runtime versions validated on the local RTX 4080 test machine."""
+RUNTIME_TAG = "r3"
+TORCH_VERSION = "2.11.0"
+ENGINE_REVISION = "0edaf2f4053ef4731334b8329834b107977f9637"
+ENGINE_REQUIREMENT = f"git+https://github.com/multimodal-art-projection/YuE.git@{ENGINE_REVISION}"

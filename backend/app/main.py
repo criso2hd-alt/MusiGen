@@ -7,21 +7,37 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from .gpu import ModelBusy
 
 from .api import router as api_router
 from .config import settings
 from .jobs import jobs
+from .telemetry import telemetry
+from .media_tasks import media_tasks
+from .media_api import router as media_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.ensure_dirs()
     jobs.start()
+    telemetry.start()
+    media_tasks.start()
     yield
+    from .media_install import media_installer
+    await asyncio.to_thread(media_installer.stop)
+    await media_tasks.stop()
     await jobs.stop()
+    await telemetry.stop()
 
 
-app = FastAPI(title="MusiGen", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="MusiGen", version="0.0.2", lifespan=lifespan)
+
+
+@app.exception_handler(ModelBusy)
+async def model_busy_handler(request, exc):
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,6 +48,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+app.include_router(media_router)
 
 
 async def _stream(ws: WebSocket, channel: str) -> None:

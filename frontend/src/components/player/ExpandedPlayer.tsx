@@ -16,6 +16,7 @@ import { Visualizer } from "./Visualizer";
 import { Milkdrop } from "./Milkdrop";
 import { VizControls } from "./VizControls";
 import { AlbumArt } from "./AlbumArt";
+import { LyricsAppearance } from "./LyricsAppearance";
 import { LyricsOverlay } from "./LyricsOverlay";
 
 function fmt(s: number) {
@@ -61,7 +62,7 @@ export function ExpandedPlayer() {
     <div className="fixed inset-0 z-[60] flex flex-col bg-[var(--bg)]">
       <div className="app-backdrop" />
       {/* header */}
-      <div className="flex items-center justify-between px-6 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
         <div className="flex items-center gap-3">
           <AlbumArt size={56} playing={isPlaying} cover={current?.cover_url ?? null} />
           <div>
@@ -73,7 +74,7 @@ export function ExpandedPlayer() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* engine toggle: Milkdrop (Winamp-style) vs Classic skins */}
           <div className="flex items-center gap-1 rounded-lg bg-black/30 p-1">
             <button
@@ -100,6 +101,7 @@ export function ExpandedPlayer() {
             </button>
           </div>
           {vizEngine === "classic" && <VizControls />}
+          {showLyrics && <LyricsAppearance />}
           <button
             onClick={toggleLyrics}
             title="Show lyrics over the visualizer"
@@ -130,7 +132,7 @@ export function ExpandedPlayer() {
       </div>
 
       {/* big visualizer */}
-      <div className="relative mx-6 min-h-0 flex-1 overflow-hidden rounded-3xl bg-black/40 ring-1 ring-white/5">
+      <div data-visualizer-stage className="relative mx-6 min-h-0 flex-1 overflow-hidden rounded-3xl bg-black/40 ring-1 ring-white/5">
         {vizEngine === "milkdrop" ? (
           <Milkdrop playing={isPlaying} />
         ) : (
@@ -141,6 +143,7 @@ export function ExpandedPlayer() {
             lyrics={current.lyrics}
             currentTime={currentTime}
             duration={duration}
+            timing={current.lyric_timing}
           />
         )}
       </div>

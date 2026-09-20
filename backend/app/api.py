@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import shutil
 import time
@@ -24,6 +25,7 @@ from .schemas import (
     SaveRequest,
     Job,
     LyricsRequest,
+    LyricFitRequest,
     LyricsResponse,
     Playlist,
     PlaylistCreate,
@@ -71,6 +73,15 @@ def _tag_flac(dest: Path, track: Track) -> None:
         from mutagen.flac import FLAC, Picture
 
         audio = FLAC(str(dest))
+        audio["musigen_seed"] = str(track.seed)
+        audio["musigen_recipe"] = json.dumps({
+            "engine": track.engine, "seed": track.seed, "style": track.style,
+            "extra": track.extra, "pills": [p.model_dump() for p in track.pills],
+            "options": track.options.model_dump() if track.options else None,
+            "abc": track.abc, "generation_meta": track.generation_meta,
+            "reference": track.reference,
+            "lyric_timing": track.lyric_timing.model_dump() if track.lyric_timing else None,
+        }, ensure_ascii=False)
         if track.title:
             audio["title"] = track.title
         if track.style:
@@ -209,12 +220,13 @@ async def llm_select(req: dict) -> dict:
     valid = {c["repo"] for c in settings.LLM_CHOICES}
     if model not in valid:
         raise HTTPException(400, "Unknown lyric model")
-    app_settings.set_llm_model(model)
-    model_manager.clear_total_cache()
-    try:
-        llm.unload()  # drop the previously loaded weights so the next call reloads
-    except Exception:
-        pass
+    from .gpu import model_session
+    def select():
+        with model_session("Switching lyric model", wait=False):
+            llm.unload()
+            app_settings.set_llm_model(model)
+            model_manager.clear_total_cache()
+    await asyncio.to_thread(select)
     return await llm_options()
 
 
@@ -237,7 +249,8 @@ async def shutdown() -> dict:
 async def compose(req: ComposeRequest) -> ComposeResponse:
     if req.ai:
         style, used = await refine_style(req.pills, req.extra)
-        return ComposeResponse(style=style, used_llm=used)
+        return ComposeResponse(style=style, used_llm=used, warning=None if used else
+            "AI writing did not return a prompt. Your original mix has been kept. Check the installed lyric model and backend log.")
     # instant, deterministic path for the live preview
     from .prompt_composer import compose_style
 
@@ -249,16 +262,35 @@ async def compose(req: ComposeRequest) -> ComposeResponse:
 
 @router.post("/lyrics", response_model=LyricsResponse)
 async def lyrics(req: LyricsRequest) -> LyricsResponse:
-    text, used = await write_lyrics(req.theme, req.pills, req.structure)
-    return LyricsResponse(lyrics=text, used_llm=used)
+    from .lyric_fit import estimate
+    text, used = await write_lyrics(req.theme, req.pills, req.structure, duration=req.duration,
+        bpm=req.bpm, fit_duration=req.fit_duration, style=req.style)
+    fit = estimate(text, req.duration, req.pills, req.bpm, req.style)
+    return LyricsResponse(lyrics=text, used_llm=used, fit=fit,
+        warning=fit["warning"] if used else "AI writer unavailable; a template was inserted. " + (fit["warning"] or ""))
+
+
+@router.post("/lyrics/fit")
+async def lyric_fit(req: LyricFitRequest) -> dict:
+    from .lyric_fit import estimate
+    return estimate(req.lyrics, req.duration, req.pills, req.bpm, req.style)
 
 
 # -- generation / jobs ------------------------------------------------------
 
 
+@router.get("/system")
+async def system_status() -> dict:
+    from .telemetry import telemetry
+    return telemetry.snapshot()
+
+
 @router.post("/generate", response_model=Job)
 async def generate(req: GenerateRequest) -> Job:
-    return await jobs.submit(req)
+    try:
+        return await jobs.submit(req)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.get("/jobs", response_model=list[Job])
@@ -278,6 +310,20 @@ async def get_job(job_id: str) -> Job:
 async def cancel_job(job_id: str) -> dict:
     if not jobs.cancel(job_id):
         raise HTTPException(404, "Job not found")
+    return {"ok": True}
+
+
+@router.post("/jobs/{job_id}/pause")
+async def pause_job(job_id: str) -> dict:
+    if not jobs.pause(job_id):
+        raise HTTPException(409, "This job cannot be paused")
+    return {"ok": True}
+
+
+@router.post("/jobs/{job_id}/resume")
+async def resume_job(job_id: str) -> dict:
+    if not await jobs.resume(job_id):
+        raise HTTPException(409, "This job cannot be resumed")
     return {"ok": True}
 
 

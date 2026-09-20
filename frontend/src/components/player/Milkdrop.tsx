@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  SkipBack,
-  SkipForward,
-  Shuffle,
+  ArrowLeft,
+  ArrowRight,
+  Dice5,
   Repeat,
   Search,
   Maximize,
@@ -16,6 +16,7 @@ import butterchurnImport from "butterchurn";
 import butterchurnPresetsImport from "butterchurn-presets";
 import butterchurnPresetsExtraImport from "butterchurn-presets/lib/butterchurnPresetsExtra.min.js";
 import butterchurnPresetsExtra2Import from "butterchurn-presets/lib/butterchurnPresetsExtra2.min.js";
+import { initialPreset } from "../../lib/presetSelection";
 import { audioEngine } from "../../lib/audio";
 
 // These packages ship webpack UMD bundles, so the real object can sit under
@@ -84,21 +85,11 @@ export function Milkdrop({ playing }: { playing: boolean }) {
   const idleTimer = useRef<number>(0);
 
   const entries = useMemo(getPresetEntries, []);
-  const startIdx = useMemo(() => {
-    // A pinned default preset (by name) always loads first when set.
-    const dn = ls.get("mg.mdDefault", "");
-    if (dn) {
-      const i = entries.findIndex((e) => e[0] === dn);
-      if (i >= 0) return i;
-    }
-    const saved = parseInt(ls.get("mg.mdPreset", "-1"), 10);
-    if (saved >= 0 && saved < entries.length) return saved;
-    return Math.floor(Math.random() * entries.length);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries.length]);
+  const [startIdx] = useState(() => initialPreset(entries.map((entry) => entry[0]),
+    ls.get("mg.mdDefault", ""), ls.get("mg.mdPresetName", ""), Number(ls.get("mg.mdPreset", "-1"))));
 
   const [idx, setIdx] = useState(startIdx);
-  const [auto, setAuto] = useState(ls.get("mg.mdAuto", "1") === "1");
+  const [auto, setAuto] = useState(false);
   const [defaultName, setDefaultName] = useState(() => ls.get("mg.mdDefault", ""));
   const [showUi, setShowUi] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -124,7 +115,7 @@ export function Milkdrop({ playing }: { playing: boolean }) {
     else s.add(name);
     persistDisabled(s);
   };
-  const enabledCount = entries.length - disabled.size;
+  const enabledCount = entries.filter(([name]) => !disabled.has(name)).length;
 
   const idxRef = useRef(idx);
   idxRef.current = idx;
@@ -134,6 +125,7 @@ export function Milkdrop({ playing }: { playing: boolean }) {
     if (!entry || !vizRef.current) return;
     vizRef.current.loadPreset(entry[1], blend);
     ls.set("mg.mdPreset", String(i));
+    ls.set("mg.mdPresetName", entry[0]);
   };
 
   const goto = (i: number) => {
@@ -149,21 +141,24 @@ export function Milkdrop({ playing }: { playing: boolean }) {
     for (let i = 0; i < entries.length; i++) {
       if (!disabledRef.current.has(entries[i][0])) out.push(i);
     }
-    return out.length ? out : entries.map((_, i) => i);
+    return out;
   };
   const nextPreset = () => {
     const en = enabledIndices();
+    if (!en.length) return;
     const cur = idxRef.current;
     goto(en.find((i) => i > cur) ?? en[0]);
   };
   const prevPreset = () => {
     const en = enabledIndices();
+    if (!en.length) return;
     const cur = idxRef.current;
     const before = en.filter((i) => i < cur);
     goto(before.length ? before[before.length - 1] : en[en.length - 1]);
   };
   const randomPreset = () => {
     const en = enabledIndices();
+    if (!en.length) return;
     goto(en[Math.floor(Math.random() * en.length)]);
   };
 
@@ -237,7 +232,7 @@ export function Milkdrop({ playing }: { playing: boolean }) {
   // --- keyboard: ← / → change presets ---
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return;
+      if (e.defaultPrevented || (e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable=true], [role=dialog]"))) return;
       if (e.key === "ArrowRight") {
         wake();
         nextPreset();
@@ -254,7 +249,7 @@ export function Milkdrop({ playing }: { playing: boolean }) {
   const toggleAuto = () => {
     const v = !auto;
     setAuto(v);
-    ls.set("mg.mdAuto", v ? "1" : "0");
+
   };
 
   const currentName = entries[idx]?.[0] ?? "";
@@ -266,7 +261,7 @@ export function Milkdrop({ playing }: { playing: boolean }) {
   };
 
   const goFullscreen = () => {
-    const el = wrapRef.current;
+    const el = wrapRef.current?.closest("[data-visualizer-stage]") ?? wrapRef.current;
     if (!el) return;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     else el.requestFullscreen?.().catch(() => {});
@@ -282,13 +277,6 @@ export function Milkdrop({ playing }: { playing: boolean }) {
     <div
       ref={wrapRef}
       onMouseMove={wake}
-      onClick={(e) => {
-        // click the canvas background = next preset (Winamp nostalgia)
-        if (e.target === canvasRef.current) {
-          wake();
-          nextPreset();
-        }
-      }}
       className="group relative h-full w-full overflow-hidden bg-black"
     >
       <canvas ref={canvasRef} className="h-full w-full" />
@@ -312,15 +300,16 @@ export function Milkdrop({ playing }: { playing: boolean }) {
           showUi ? "opacity-100" : "pointer-events-none translate-y-2 opacity-0"
         }`}
       >
-        <div className="flex items-center gap-1 rounded-2xl bg-black/55 px-2 py-1.5 backdrop-blur-md ring-1 ring-white/10">
-          <IconBtn onClick={prevPreset} title="Previous preset (←)">
-            <SkipBack size={16} />
+        <div aria-label="Visualizer preset controls" className="flex items-center gap-1 rounded-2xl bg-black/80 px-2 py-1.5 backdrop-blur-md ring-1 ring-white/10">
+          <span className="px-1 text-[10px] uppercase tracking-wider text-white/60">Visuals</span>
+          <IconBtn onClick={prevPreset} title="Previous visualizer preset (←)">
+            <ArrowLeft size={16} />
           </IconBtn>
           <IconBtn onClick={randomPreset} title="Random preset">
-            <Shuffle size={16} />
+            <Dice5 size={16} /><span className="ml-1 text-xs">Random</span>
           </IconBtn>
-          <IconBtn onClick={nextPreset} title="Next preset (→ or click)">
-            <SkipForward size={16} />
+          <IconBtn onClick={nextPreset} title="Next visualizer preset (→)">
+            <ArrowRight size={16} />
           </IconBtn>
           <div className="mx-1 h-5 w-px bg-white/15" />
           <IconBtn
@@ -328,7 +317,7 @@ export function Milkdrop({ playing }: { playing: boolean }) {
             title={auto ? "Auto-cycle: on" : "Auto-cycle: off"}
             active={auto}
           >
-            <Repeat size={16} />
+            <Repeat size={16} /><span className="ml-1 whitespace-nowrap text-xs">Auto: {auto ? "On" : "Off"}</span>
           </IconBtn>
           <IconBtn
             onClick={togglePin}
@@ -395,7 +384,7 @@ export function Milkdrop({ playing }: { playing: boolean }) {
               </div>
             </div>
             <div className="max-h-72 space-y-0.5 overflow-y-auto">
-              {filtered.slice(0, 200).map((p) => {
+              {filtered.map((p) => {
                 const name = entries[p.i]?.[0] ?? "";
                 const off = disabled.has(name);
                 return (
@@ -456,7 +445,9 @@ function IconBtn({
     <button
       onClick={onClick}
       title={title}
-      className={`rounded-xl p-2 transition ${
+      aria-label={title}
+      aria-pressed={active}
+      className={`inline-flex items-center rounded-xl p-2 transition ${
         active
           ? "bg-[var(--accent)]/25 text-[var(--accent)]"
           : "text-white/75 hover:bg-white/10 hover:text-white"

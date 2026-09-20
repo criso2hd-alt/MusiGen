@@ -16,9 +16,9 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from runtime_config import ENGINE_REQUIREMENT, RUNTIME_TAG, TORCH_VERSION
 
 APP_NAME = "MusiGen"
-RUNTIME_TAG = "r1"  # bump to force a runtime rebuild on upgrades
 
 
 def res_dir() -> Path:
@@ -72,7 +72,7 @@ def ensure_runtime(res: Path, home: Path) -> Path:
     log("Installing CUDA PyTorch (~2.5 GB, one time)…")
     _run([
         str(uv), "pip", "install", "--python", str(py),
-        "torch", "--index-url", "https://download.pytorch.org/whl/cu128",
+        f"torch=={TORCH_VERSION}", "--index-url", "https://download.pytorch.org/whl/cu128",
     ])
 
     log("Installing MusiGen backend dependencies…")
@@ -82,7 +82,7 @@ def ensure_runtime(res: Path, home: Path) -> Path:
 
     log("Installing the YuE2 engine…")
     _run([str(uv), "pip", "install", "--python", str(py),
-          "git+https://github.com/multimodal-art-projection/YuE.git", "--no-deps"])
+          ENGINE_REQUIREMENT, "--no-deps"])
 
     marker.write_text(RUNTIME_TAG, encoding="utf-8")
     log("Runtime ready.")

@@ -16,6 +16,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Wand2, Loader2, Plus, X, Copy, GripVertical } from "lucide-react";
 import { useStore } from "../../store";
+import { api } from "../../lib/api";
+import type { LyricFit } from "../../lib/types";
 
 const SECTION_TYPES = [
   "intro",
@@ -77,8 +79,25 @@ export function LyricsPanel() {
   const structure = useStore((s) => s.lyricsStructure);
   const ollama = useStore((s) => s.ollama);
   const models = useStore((s) => s.models);
+  const pills = useStore((s) => s.mixerPills);
+  const style = useStore((s) => s.style);
+  const options = useStore((s) => s.options);
+  const setOptions = useStore((s) => s.setOptions);
+  const [fitDuration, setFitDuration] = useState(true);
+  const [fit, setFit] = useState<LyricFit | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+
+  useEffect(() => {
+    let closed = false;
+    const timer = setTimeout(() => {
+      api.lyricFit(lyrics, pills, options.max_duration, options.bpm, style)
+        .then((result) => { if (!closed) setFit(result); })
+        .catch(() => { if (!closed) setFit(null); });
+    }, 350);
+    return () => { closed = true; clearTimeout(timer); };
+  }, [lyrics, pills, options.max_duration, options.bpm, style]);
 
   // Local {id,name}[] mirror of the structure (stable ids for drag).
   const [items, setItems] = useState<Item[]>(() => structure.map(mk));
@@ -104,15 +123,18 @@ export function LyricsPanel() {
   const llmReady = models["llm"]?.ready;
   const run = async () => {
     setBusy(true);
+    setError("");
     try {
-      await generateLyrics();
+      await generateLyrics(fitDuration);
+    } catch (err) {
+      setError(String(err));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="glass flex flex-col rounded-2xl p-4">
+    <div data-tour="lyrics" className="glass flex min-h-full flex-col rounded-2xl p-4">
       {/* Structure chips */}
       <div className="mb-2">
         <div className="mb-1.5 flex items-center justify-between">
@@ -191,12 +213,21 @@ export function LyricsPanel() {
       </div>
 
       <textarea
+        aria-label="Song lyrics"
         value={lyrics}
         onChange={(e) => setLyrics(e.target.value)}
         spellCheck={false}
         placeholder="[verse]&#10;…&#10;&#10;[chorus]&#10;…"
-        className="min-h-[120px] max-h-[75vh] flex-1 resize-y rounded-xl bg-black/40 p-3 font-mono text-sm leading-relaxed outline-none ring-1 ring-white/10 focus:ring-[var(--accent-3)]/40"
+        className="min-h-[180px] flex-auto resize-y rounded-xl bg-black/40 p-3 font-mono text-sm leading-relaxed outline-none ring-1 ring-white/10 focus:ring-[var(--accent-3)]/40"
       />
+      <label className="mt-2 flex items-center gap-2 text-xs"><input type="checkbox" checked={fitDuration} onChange={(e) => setFitDuration(e.target.checked)} />Write lyrics for the selected duration ({options.max_duration}s)</label>
+      {fit && fit.word_count > 0 && <div className="mt-2 text-xs" role="status">
+        <p className={fit.warning ? "text-amber-300" : "text-[var(--muted)]"}>{fit.warning || `Estimated vocal fit: ${fit.estimated_min_seconds}–${fit.estimated_max_seconds}s`}</p>
+        <p className="mt-1 text-[var(--muted)]">{fit.note}</p>
+        {fit.warning && !fit.exceeds_duration_limit && <button className="mt-1 rounded bg-white/10 px-2 py-1" onClick={() => setOptions({ max_duration: fit.suggested_duration })}>Use {fit.suggested_duration}s duration</button>}
+        {fit.exceeds_duration_limit && <p className="mt-1 text-amber-300">Consider fewer lyrics; the estimate exceeds the available duration range.</p>}
+      </div>}
+      {error && <p role="alert" className="mt-2 text-sm text-amber-300">{error}</p>}
       <p className="mt-1.5 text-[11px] text-[var(--muted)]">
         Sections above become <code>[tags]</code> the writer fills{" "}
         {!llmReady && !ollama && "· install the lyric model in Setup for real AI lyrics"}

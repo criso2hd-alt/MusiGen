@@ -8,10 +8,14 @@ import {
   HardDrive,
   FolderOpen,
   RefreshCw,
+  ExternalLink,
+  Coffee,
 } from "lucide-react";
 import { useStore } from "../../store";
 import { api } from "../../lib/api";
 import { EngineSelector } from "./EngineSelector";
+import { MicrophoneSetup } from "./MicrophoneSetup";
+import { MediaToolsSetup } from "./MediaToolsSetup";
 
 function fmtBytes(n: number) {
   if (!n) return "0 MB";
@@ -50,7 +54,7 @@ function StorageSettings() {
   return (
     <div className="space-y-3">
       <p className="text-sm text-[var(--muted)]">
-        Everything MusiGen stores lives in its own folder next to the app — delete
+        Everything MusiGen stores lives in its own folder next to the app â€” delete
         that folder and it's all gone. Nothing is written elsewhere.
       </p>
       {info &&
@@ -68,7 +72,7 @@ function StorageSettings() {
                 </span>
               </div>
               <div className="truncate text-[11px] text-[var(--muted)]" title={info[r.key].path}>
-                {r.hint} · {info[r.key].path}
+                {r.hint} Â· {info[r.key].path}
               </div>
             </div>
             <button
@@ -81,7 +85,7 @@ function StorageSettings() {
           </div>
         ))}
       <div className="flex items-center justify-between text-xs text-[var(--muted)]">
-        <span>{info ? `${fmtBytes(info.free_bytes)} free on this drive` : "…"}</span>
+        <span>{info ? `${fmtBytes(info.free_bytes)} free on this drive` : "â€¦"}</span>
         <button
           onClick={refresh}
           className="flex items-center gap-1.5 rounded-lg px-2 py-1 hover:text-white"
@@ -128,7 +132,7 @@ function ModelRow({ id }: { id: string }) {
     const sel = llm.options.find((o) => o.repo === llm.selected);
     if (sel) {
       meta = {
-        label: `Lyric writer — ${sel.key} (Qwen2.5)`,
+        label: `Lyric writer â€” ${sel.key} (Qwen2.5)`,
         size: sel.size,
         note: "Powers the AI lyric writer and prompt refiner, on your GPU. Optional.",
       };
@@ -155,7 +159,7 @@ function ModelRow({ id }: { id: string }) {
       </div>
 
       {m.ready ? (
-        <p className="mt-1 text-xs text-[var(--muted)]">Ready — cached in your MusiGen folder.</p>
+        <p className="mt-1 text-xs text-[var(--muted)]">Ready â€” cached in your MusiGen folder.</p>
       ) : m.downloading ? (
         <div className="mt-2">
           <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
@@ -168,7 +172,7 @@ function ModelRow({ id }: { id: string }) {
             <span>{m.message || `${Math.round(m.percent)}%`}</span>
             <span>
               {m.speed_mbps > 0
-                ? `${m.speed_mbps.toFixed(1)} MB/s · ${fmtEta(m.eta_sec)}`
+                ? `${m.speed_mbps.toFixed(1)} MB/s Â· ${fmtEta(m.eta_sec)}`
                 : ""}
             </span>
           </div>
@@ -176,7 +180,7 @@ function ModelRow({ id }: { id: string }) {
       ) : (
         <div className="mt-1">
           <p className="mb-2 text-xs text-[var(--muted)]">
-            {meta.note} ({meta.size}, one‑time)
+            {meta.note} ({meta.size}, oneâ€‘time)
           </p>
           <button
             onClick={() => downloadModel(id)}
@@ -352,7 +356,7 @@ function ThemeSettings() {
 
 export function SetupView() {
   return (
-    <div className="h-full overflow-y-auto p-5">
+    <div data-tour="setup" className="h-full overflow-y-auto p-5">
       <div className="mx-auto max-w-3xl space-y-4">
         <h1 className="mb-2 text-2xl font-bold tracking-tight">Setup</h1>
 
@@ -365,24 +369,49 @@ export function SetupView() {
           <ModelDownloads />
         </Section>
 
-        <Section icon={<HardDrive size={17} />} title="Storage" desc="Where MusiGen keeps its models and your music — all in one portable folder.">
+        <Section icon={<HardDrive size={17} />} title="Storage" desc="Where MusiGen keeps its models and your music â€” all in one portable folder.">
           <StorageSettings />
+        </Section>
+
+        <Section icon={<Cpu size={17} />} title="Microphone" desc="Record a melody directly in Create."><MicrophoneSetup /></Section>
+        <Section icon={<Cpu size={17} />} title="Optional media tools" desc="Reference melody import and lyric synchronization.">
+          <MediaToolsSetup />
         </Section>
 
         <Section icon={<ScrollText size={17} />} title="Licenses" desc="MusiGen bundles third-party models and code.">
           <ul className="space-y-2 text-sm text-[var(--muted)]">
             <li>
-              <span className="text-[var(--text)]">YuE2</span> — code Apache-2.0;
+              <span className="text-[var(--text)]">YuE2</span> â€” code Apache-2.0;
               model weights <span className="text-[var(--warn)]">CC BY-NC 4.0 (non-commercial)</span>.
             </li>
             <li>
-              <span className="text-[var(--text)]">Qwen2.5</span> — lyric writer,
+              <span className="text-[var(--text)]">Qwen2.5</span> â€” lyric writer,
               Apache-2.0 (Alibaba).
             </li>
             <li>
-              <span className="text-[var(--text)]">MusiGen app</span> — MIT.
+              <span className="text-[var(--text)]">MusiGen app</span> â€” MIT.
             </li>
           </ul>
+        </Section>
+        <Section icon={<ExternalLink size={17} />} title="Project & support" desc="Follow MusiGen on GitHub or support its development.">
+          <div className="flex flex-wrap gap-3">
+            {[
+              { label: "GitHub", url: "https://github.com/criso2hd-alt/MusiGen", icon: <ExternalLink size={17} /> },
+              { label: "Buy Me a Coffee", url: "https://buymeacoffee.com/criso2hdj", icon: <Coffee size={17} /> },
+            ].map(({ label, url, icon }) => (
+              <a key={url} href={url} target="_blank" rel="noopener noreferrer"
+                onClick={(event) => {
+                  const bridge = (window as any).pywebview?.api;
+                  if (bridge?.open_external) {
+                    event.preventDefault();
+                    bridge.open_external(url);
+                  }
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium transition hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
+                {icon}{label}
+              </a>
+            ))}
+          </div>
         </Section>
       </div>
     </div>

@@ -9,7 +9,7 @@ import {
   Settings,
 } from "lucide-react";
 
-export const APP_VERSION = "0.0.1";
+export const APP_VERSION = "0.0.2";
 import type { ReactNode } from "react";
 import clsx from "clsx";
 import { useStore } from "../store";
@@ -139,6 +139,7 @@ export function TopBar() {
       </nav>
 
       <div className="flex items-center gap-2 text-xs">
+        <button onClick={() => window.dispatchEvent(new Event("musigen:tour"))} className="rounded-lg px-2 py-1.5 text-xs text-[var(--muted)] hover:bg-white/10 hover:text-white">Quick tour</button>
         {tab === "create" && <PanelsMenu />}
         <button
           onClick={() => setTab("setup")}

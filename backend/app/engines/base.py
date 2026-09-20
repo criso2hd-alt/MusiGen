@@ -25,6 +25,12 @@ class EngineRequest:
     top_p: float = 0.95
     top_k: int = 100
     repetition_penalty: float = 1.2
+    checkpoint_dir: Optional[Path] = None
+    is_pause_requested: Optional[Callable[[], bool]] = None
+    reference_mode: str = "original"
+    reference_fit_duration: bool = True
+    arrangement_bpm: Optional[int] = None
+    memory_mode: str = "balanced"
 
 
 @dataclass
@@ -33,6 +39,9 @@ class EngineProgress:
     stage: str
     progress: float  # 0..1 within the whole job
     message: str = ""
+    completed: Optional[int] = None
+    total: Optional[int] = None
+    unit: Optional[str] = None
 
 
 @dataclass
@@ -50,6 +59,10 @@ CancelledFn = Callable[[], bool]
 
 class EngineCancelled(Exception):
     """Raised inside an engine when the job runner signals cancellation."""
+
+
+class EnginePaused(Exception):
+    """A completed stage was saved; the GPU can now serve another request."""
 
 
 class MusicEngine(ABC):

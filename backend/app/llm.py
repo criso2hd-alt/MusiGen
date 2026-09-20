@@ -7,6 +7,8 @@ music engine unloads the LLM before it loads (see yue2_engine).
 from __future__ import annotations
 
 import threading
+import logging
+from .gpu import model_operation
 
 from .config import settings
 
@@ -27,6 +29,7 @@ def is_loaded() -> bool:
     return _model is not None
 
 
+@model_operation()
 def unload() -> None:
     global _model, _tok
     with _lock:
@@ -79,6 +82,7 @@ def _load() -> None:
     _model.eval()
 
 
+@model_operation(wait=False, name="Prompt and lyric writing")
 def generate(system: str, user: str, max_new_tokens: int = 700,
              temperature: float = 0.9) -> str | None:
     """Chat-style generation. Returns None if the model isn't available."""
@@ -109,4 +113,5 @@ def generate(system: str, user: str, max_new_tokens: int = 700,
             gen = out[0][inputs["input_ids"].shape[1]:]
             return _tok.decode(gen, skip_special_tokens=True).strip()
         except Exception:
+            logging.getLogger(__name__).exception("Local text generation failed on %s", _device)
             return None

@@ -1,11 +1,13 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import {
   Shuffle,
+  X,
   LayoutGrid,
   Palette,
   Sparkles,
   ArrowDownAZ,
+  ArrowUpAZ,
   List,
   Orbit,
 } from "lucide-react";
@@ -13,6 +15,7 @@ import clsx from "clsx";
 import { useStore } from "../../store";
 import type { PillCategory, PillSort } from "../../lib/types";
 import { PillFace } from "./PillChip";
+import { usePreferences } from "../../lib/preferences";
 import { WatchPills } from "./WatchPills";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -149,11 +152,22 @@ export function PillTray() {
   const pillView = useStore((s) => s.pillView);
   const setPillView = useStore((s) => s.setPillView);
   const [scrambleSeed, setScrambleSeed] = useState(1);
+  const [query, setQuery] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
+  const [descending, setDescending] = useState(false);
+  const [manage, setManage] = useState(false);
+  const fontSize = usePreferences((s) => s.ingredientSize);
+  const hidden = usePreferences((s) => s.hiddenIngredients);
+  const update = usePreferences((s) => s.update);
+  const filteredCatalog = useMemo(() => catalog ? Object.fromEntries(Object.entries(catalog).map(([category, labels]) => [category, labels.filter((label) =>
+    !hidden.includes(`${category}:${label}`) && `${category} ${label}`.toLowerCase().includes(query.trim().toLowerCase()))])) as Record<PillCategory, string[]> : null, [catalog, hidden, query]);
 
   const sections = useMemo(
-    () => (catalog ? arrange(catalog, pillSort, scrambleSeed) : []),
-    [catalog, pillSort, scrambleSeed]
+    () => (filteredCatalog ? arrange(filteredCatalog, pillSort, scrambleSeed).map((section) => ({ ...section, items: pillSort === "az" && descending ? [...section.items].reverse() : section.items })).filter((section) => section.items.length) : []),
+    [filteredCatalog, pillSort, scrambleSeed, descending]
   );
+
+  const orbitItems = useMemo(() => sections.flatMap((s) => s.items), [sections]);
 
   const scramble = () => {
     setScrambleSeed(Math.floor(Math.random() * 1e9) + 1);
@@ -161,16 +175,28 @@ export function PillTray() {
   };
 
   return (
-    <div className="glass flex h-full min-h-0 flex-col rounded-2xl p-4">
+    <div data-tour="ingredients" className="glass ingredient-tray flex h-full min-h-0 flex-col rounded-2xl p-4" style={{ "--ingredient-size": `${fontSize}px` } as React.CSSProperties}>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-24 flex-1"><input ref={searchInput} aria-label="Search ingredients" placeholder="Search ingredients..." value={query} onChange={(e) => setQuery(e.target.value)} className="w-full rounded-lg bg-black/30 py-2 pl-3 pr-9 text-sm ring-1 ring-white/10" />{query && <button aria-label="Clear ingredient search" title="Clear search" onClick={() => { setQuery(""); searchInput.current?.focus(); }} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--muted)] hover:text-white"><X size={14} /></button>}</div>
+        <label className="flex items-center gap-1 text-xs">Text <select aria-label="Ingredient text size" value={fontSize} onChange={(e) => update({ ingredientSize: Number(e.target.value) })} className="rounded bg-[#171b29] px-2 py-1.5"><option value={10}>Small</option><option value={12}>Medium</option><option value={15}>Large</option></select></label>
+        <button aria-expanded={manage} onClick={() => setManage(!manage)} className="rounded-lg bg-white/10 px-2 py-2 text-xs">Customize</button>
+      </div>
+      {manage && <div className="mb-3 max-h-52 shrink-0 overflow-auto rounded-lg bg-black/30 p-3 text-xs">
+        <div className="mb-2 flex justify-between"><span>Visible ingredients</span><button className="underline" onClick={() => update({ hiddenIngredients: [] })}>Show all</button></div>
+        {catalog && Object.entries(catalog).flatMap(([category, labels]) => labels.filter((label) => `${category} ${label}`.toLowerCase().includes(query.toLowerCase())).map((label) => {
+          const key = `${category}:${label}`;
+          return <label key={key} className="mr-3 inline-flex items-center gap-1 py-1"><input type="checkbox" checked={!hidden.includes(key)} onChange={() => update({ hiddenIngredients: hidden.includes(key) ? hidden.filter((h) => h !== key) : [...hidden, key] })} />{label}</label>;
+        }))}
+      </div>}
       <div className="mb-2 flex items-center justify-end gap-2">
         <div className="flex items-center gap-1">
-          {pillView === "list" && (
+          {(
             <>
               {SORTS.map((s) => (
                 <button
                   key={s.id}
-                  onClick={() => setPillSort(s.id)}
-                  title={s.label}
+                  onClick={() => { if (s.id === "az" && pillSort === "az") setDescending(!descending); setPillSort(s.id); }}
+                  title={s.id === "az" ? `Alphabetical ${descending ? "Z-A" : "A-Z"} - click to reverse` : s.label}
                   className={clsx(
                     "rounded-md p-1.5 transition",
                     pillSort === s.id
@@ -178,7 +204,7 @@ export function PillTray() {
                       : "text-[var(--muted)] hover:bg-white/10 hover:text-white"
                   )}
                 >
-                  {s.icon}
+                  {s.id === "az" && descending ? <ArrowUpAZ size={13} /> : s.icon}
                 </button>
               ))}
               <button
@@ -224,9 +250,10 @@ export function PillTray() {
         </div>
       </div>
 
+      {catalog && orbitItems.length === 0 && <p role="status" className="mb-3 text-sm text-[var(--muted)]">No visible ingredients match. Try another search or Customize / Show all.</p>}
       {pillView === "watch" ? (
         <div className="min-h-0 flex-1">
-          <WatchPills />
+          <WatchPills items={orbitItems} fontSize={fontSize} />
         </div>
       ) : (
         <>

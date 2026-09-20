@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { api } from "./lib/api";
+import { composeRecipe } from "./lib/recipe";
+import { playbackTracks, adjacentTrack } from "./lib/playbackQueue";
 import { audioEngine } from "./lib/audio";
 import { dock } from "./components/workspace/dock";
 import type {
@@ -13,12 +15,17 @@ import type {
   PillCategory,
   PillSort,
   Playlist,
-  Track,
+  Track, ReferenceMelody,
   VizConfig,
   VizPreset,
 } from "./lib/types";
 
 let pillCounter = 0;
+let recipeRevision = 0;
+function recipePatch(mixerPills: Pill[], extra: string) {
+  recipeRevision++;
+  return { mixerPills, extra, style: composeRecipe(mixerPills, extra), usedLlm: false, composing: false, promptWarning: "" };
+}
 const uid = () => `p${Date.now().toString(36)}${pillCounter++}`;
 
 const ls = {
@@ -132,6 +139,12 @@ interface State {
   extra: string;
   style: string;
   usedLlm: boolean;
+  promptWarning: string;
+  abc: string | null;
+  reference: ReferenceMelody | null;
+  referenceTask: string | null;
+  setReferenceTask: (id: string) => void;
+  setReference: (reference: ReferenceMelody | null) => void;
   lyrics: string;
   theme: string;
   title: string;
@@ -207,7 +220,7 @@ interface State {
   compose: () => Promise<void>;
   refineStyleAI: () => Promise<void>;
   setLyricsStructure: (s: string[]) => void;
-  generateLyrics: () => Promise<void>;
+  generateLyrics: (fitDuration?: boolean) => Promise<void>;
   generate: () => Promise<void>;
   cancelJob: (id: string) => void;
   ingestJob: (job: Job) => void;
@@ -217,7 +230,7 @@ interface State {
   createPlaylist: (name: string) => Promise<void>;
   addToPlaylist: (plId: string, trackId: string) => Promise<void>;
   deleteTrack: (id: string) => Promise<void>;
-  remixTrack: (track: Track) => void;
+  remixTrack: (track: Track, newSeed?: boolean) => void;
   generateCover: (trackId: string) => Promise<void>;
   toggleLyrics: () => void;
   renameTrack: (id: string, title: string) => Promise<void>;
@@ -273,6 +286,15 @@ export const useStore = create<State>((set, get) => ({
   catalog: null,
   mixerPills: [],
   extra: "",
+  promptWarning: "",
+  abc: null,
+  reference: null,
+  referenceTask: null,
+  setReferenceTask: (id) => set({ referenceTask: id }),
+  setReference: (reference) => {
+    recipeRevision++;
+    set((s) => ({ reference, abc: reference?.abc || null, options: reference ? { ...s.options, cot: "melody", reference_mode: "sing", reference_fit_duration: true } : s.options }));
+  },
   style: "",
   usedLlm: false,
   lyrics: "[verse]\n\n[chorus]\n",
@@ -415,18 +437,14 @@ export const useStore = create<State>((set, get) => ({
     set((s) => {
       if (s.mixerPills.some((p) => p.category === category && p.label === label))
         return s;
-      return {
-        mixerPills: [...s.mixerPills, { id: uid(), category, label, weight: 1 }],
-      };
+      return recipePatch([...s.mixerPills, { id: uid(), category, label, weight: 1 }], s.extra);
     }),
   removePill: (id) =>
-    set((s) => ({ mixerPills: s.mixerPills.filter((p) => p.id !== id) })),
+    set((s) => recipePatch(s.mixerPills.filter((p) => p.id !== id), s.extra)),
   setPillWeight: (id, weight) =>
-    set((s) => ({
-      mixerPills: s.mixerPills.map((p) => (p.id === id ? { ...p, weight } : p)),
-    })),
-  clearMixer: () => set({ mixerPills: [], style: "" }),
-  setExtra: (v) => set({ extra: v }),
+    set((s) => recipePatch(s.mixerPills.map((p) => (p.id === id ? { ...p, weight } : p)), s.extra)),
+  clearMixer: () => set((s) => recipePatch([], s.extra)),
+  setExtra: (v) => set((s) => recipePatch(s.mixerPills, v)),
   setLyrics: (v) => set({ lyrics: v }),
   setTheme: (v) => set({ theme: v }),
   setTitle: (v) => set({ title: v }),
@@ -434,42 +452,44 @@ export const useStore = create<State>((set, get) => ({
 
   compose: async () => {
     const { mixerPills, extra } = get();
-    if (mixerPills.length === 0 && !extra.trim()) {
-      set({ style: "" });
-      return;
-    }
-    set({ composing: true });
-    try {
-      const r = await api.compose(mixerPills, extra);
-      set({ style: r.style, usedLlm: r.used_llm });
-    } finally {
-      set({ composing: false });
-    }
+    set(recipePatch(mixerPills, extra));
   },
 
   refineStyleAI: async () => {
     const { mixerPills, extra } = get();
     if (mixerPills.length === 0 && !extra.trim()) return;
-    set({ composing: true });
+    const revision = ++recipeRevision;
+    set({ composing: true, promptWarning: "" });
     try {
       const r = await api.compose(mixerPills, extra, true);
-      set({ style: r.style, usedLlm: r.used_llm });
+      if (revision === recipeRevision) {
+        set({ style: r.style, usedLlm: r.used_llm, promptWarning: r.warning || "" });
+      }
+    } catch (error) {
+      if (revision === recipeRevision) set({ promptWarning: String(error) });
     } finally {
-      set({ composing: false });
+      if (revision === recipeRevision) set({ composing: false });
     }
   },
   setLyricsStructure: (s) => set({ lyricsStructure: s }),
-  generateLyrics: async () => {
-    const { theme, mixerPills, lyricsStructure } = get();
-    const r = await api.lyrics(theme, mixerPills, lyricsStructure);
+  generateLyrics: async (fitDuration = true) => {
+    const { theme, mixerPills, lyricsStructure, options, style, lyrics } = get();
+    const r = await api.lyrics(theme, mixerPills, lyricsStructure, options.max_duration, options.bpm, fitDuration, style);
+    if (get().lyrics !== lyrics || get().theme !== theme || get().mixerPills !== mixerPills || get().lyricsStructure !== lyricsStructure || get().options !== options) {
+      throw new Error("Your lyrics or recipe changed while writing. Your edits were kept; press Write again to use the updated recipe.");
+    }
     set({ lyrics: r.lyrics });
+    if (r.warning) get().showToast(r.warning, "err");
   },
 
   generate: async () => {
-    const { mixerPills, style, lyrics, options, title, engine } = get();
+    const { mixerPills, style, extra, abc, reference, lyrics, options, title, engine } = get();
     const job = await api.generate({
       title: title || undefined,
       style: style || undefined,
+      extra,
+      abc: abc || undefined,
+      reference_id: reference?.id,
       pills: mixerPills,
       lyrics,
       options,
@@ -486,7 +506,7 @@ export const useStore = create<State>((set, get) => ({
     set((s) => ({ jobs: { ...s.jobs, [job.id]: job } })),
 
   ingestTrack: (track) =>
-    set((s) => ({ tracks: [track, ...s.tracks.filter((t) => t.id !== track.id)] })),
+    set((s) => ({ tracks: [track, ...s.tracks.filter((t) => t.id !== track.id)], current: s.current?.id === track.id ? track : s.current })),
 
   refreshTracks: async () => set({ tracks: await api.tracks() }),
   refreshPlaylists: async () => set({ playlists: await api.playlists() }),
@@ -504,13 +524,14 @@ export const useStore = create<State>((set, get) => ({
     set((s) => ({ tracks: s.tracks.filter((t) => t.id !== id) }));
   },
 
-  remixTrack: (track) => {
+  remixTrack: (track, newSeed = true) => {
+    recipeRevision++;
     let pills: Pill[] = [];
     const extras: string[] = [];
     if (track.pills && track.pills.length) {
       pills = track.pills.map((p) => ({ ...p, id: uid() }));
-    } else {
-      // reconstruct pills from the saved style string by matching the catalog
+    } else if (track.extra == null) {
+      // Only reconstruct legacy recipes; a saved empty mixer is intentional.
       const cat = get().catalog;
       const lookup: Record<string, { category: PillCategory; label: string }> = {};
       if (cat) {
@@ -528,16 +549,23 @@ export const useStore = create<State>((set, get) => ({
           else extras.push(tok);
         });
     }
-    set((s) => ({
+    set({
       mixerPills: pills,
-      extra: extras.join(", "),
+      extra: track.extra ?? extras.join(", "),
       lyrics: track.lyrics || "",
+      lyricsStructure: Array.from((track.lyrics || "").matchAll(/^\s*\[([^\]]+)\]\s*$/gm), (match) => match[1]),
       style: track.style,
+      abc: track.abc ?? null,
+      reference: track.reference ? { ...track.reference, abc: track.abc ?? undefined } : null,
+      composing: false,
+      usedLlm: false,
+      promptWarning: track.options ? "" : "This older track has no saved generation settings. Defaults are shown; its original seed is available.",
       title: track.title,
-      options: { ...s.options, seed: Math.floor(Math.random() * 1_000_000) },
+      engine: track.engine,
+      options: { ...(track.options ?? defaultOptions), sampling: { ...(track.options?.sampling ?? defaultOptions.sampling) }, seed: newSeed ? Math.floor(Math.random() * 1_000_000) : track.seed },
       tab: "create",
-    }));
-    get().showToast(`Loaded "${track.title}" into the mixer — new seed set`, "ok");
+    });
+    get().showToast(`Loaded "${track.title}" — ${newSeed ? "new seed set" : "original seed restored"}`, "ok");
     setTimeout(() => dock.focus("mixer"), 50);
   },
 
@@ -599,18 +627,16 @@ export const useStore = create<State>((set, get) => ({
     set({ volume: v });
   },
   next: () => {
-    const { current, tracks } = get();
-    if (!current || tracks.length === 0) return;
-    const idx = tracks.findIndex((t) => t.id === current.id);
-    const nextTrack = tracks[(idx + 1) % tracks.length];
-    if (nextTrack) get().playTrack(nextTrack);
+    const { current, tracks, playlists, activePlaylist } = get();
+    const track = adjacentTrack(playbackTracks(tracks, playlists, activePlaylist), current?.id, 1);
+    if (track) void get().playTrack(track);
+    else audioEngine.pause();
   },
   prev: () => {
-    const { current, tracks } = get();
-    if (!current || tracks.length === 0) return;
-    const idx = tracks.findIndex((t) => t.id === current.id);
-    const prevTrack = tracks[(idx - 1 + tracks.length) % tracks.length];
-    if (prevTrack) get().playTrack(prevTrack);
+    const { current, tracks, playlists, activePlaylist } = get();
+    const track = adjacentTrack(playbackTracks(tracks, playlists, activePlaylist), current?.id, -1);
+    if (track) void get().playTrack(track);
+    else audioEngine.pause();
   },
   setPlayerExpanded: (v) => set({ playerExpanded: v }),
 

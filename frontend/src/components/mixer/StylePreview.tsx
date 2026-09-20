@@ -3,6 +3,7 @@ import { useStore } from "../../store";
 
 export function StylePreview() {
   const style = useStore((s) => s.style);
+  const warning = useStore((s) => s.promptWarning);
   const composing = useStore((s) => s.composing);
   const usedLlm = useStore((s) => s.usedLlm);
   const extra = useStore((s) => s.extra);
@@ -10,16 +11,14 @@ export function StylePreview() {
   const refineStyleAI = useStore((s) => s.refineStyleAI);
 
   return (
-    <div className="glass rounded-2xl p-4">
+    <div className="glass rounded-2xl p-3">
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Terminal size={15} className="text-[var(--accent)]" />
           <h2 className="text-sm font-semibold tracking-wide">
             Generated Prompt
           </h2>
-          <span className="text-xs text-[var(--muted)]">
-            written silently from your mix
-          </span>
+
         </div>
         <div className="flex items-center gap-2">
           {composing ? (
@@ -42,7 +41,7 @@ export function StylePreview() {
         </div>
       </div>
 
-      <div className="min-h-[52px] rounded-xl bg-black/40 p-3 font-mono text-sm leading-relaxed text-[var(--accent)]">
+      <div className="max-h-24 min-h-10 overflow-y-auto rounded-xl bg-black/40 p-2 font-mono text-sm leading-relaxed text-[var(--accent)]">
         {style || (
           <span className="text-[var(--muted)]">
             Your style prompt will appear here as you add pills…
@@ -51,11 +50,13 @@ export function StylePreview() {
       </div>
 
       <input
+        aria-label="Additional style instructions"
         value={extra}
         onChange={(e) => setExtra(e.target.value)}
         placeholder="+ add your own words (e.g. 'sung in Portuguese, tape hiss')"
-        className="mt-2 w-full rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-white/10 transition focus:ring-[var(--accent)]/50"
+        className="mt-2 w-full rounded-xl bg-black/30 px-3 py-1.5 text-sm outline-none ring-1 ring-white/10 transition focus:ring-[var(--accent)]/50"
       />
+      {warning && <p role="status" className="mt-2 text-sm text-amber-300">{warning}</p>}
     </div>
   );
 }

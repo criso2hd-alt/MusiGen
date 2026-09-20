@@ -132,16 +132,10 @@ export function PlayerBar() {
       {/* center: visualizer + transport + seek */}
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl bg-black/40">
-          <PlayerViz playing={isPlaying} viz={viz} big={bigViz} />
+          {!playerExpanded && <PlayerViz playing={isPlaying} viz={viz} big={bigViz} />}
           <div className="absolute right-2 top-2 flex items-center gap-1">
             <VizControls />
-            <button
-              onClick={() => setPlayerExpanded(true)}
-              title="Expand player (full-screen visualizer)"
-              className="rounded-md bg-black/30 p-1.5 text-[var(--muted)] transition hover:text-white"
-            >
-              <Maximize2 size={15} />
-            </button>
+
           </div>
         </div>
 
@@ -181,7 +175,8 @@ export function PlayerBar() {
       </div>
 
       {/* right: save + volume */}
-      <div className="flex w-32 flex-col justify-center gap-2">
+      <div className="flex w-40 flex-col justify-center gap-2">
+        <button data-tour="visualizer" onClick={() => setPlayerExpanded(true)} className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--accent-2)]/20 px-2 py-2 text-xs font-semibold text-[var(--text)] hover:bg-[var(--accent-2)]/30"><Maximize2 size={14} /> Full-screen visualizer</button>
         <button
           onClick={() => current && openExport(current)}
           disabled={!current}

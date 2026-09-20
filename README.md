@@ -93,6 +93,16 @@ cd frontend && npm run build          # build the SPA first
 cd ../installer && pyinstaller --noconfirm MusiGen.spec
 ```
 
+The preview can be built separately without replacing an existing portable app:
+
+```powershell
+.venv/Scripts/python -m PyInstaller --noconfirm --distpath installer/dist/test-build --workpath installer/build/test-build installer/MusiGen.spec
+```
+
+Build the frontend first. Tested runtime versions are pinned in
+`installer/runtime_config.py`. See [local preview testing](docs/LOCAL_TEST_BUILD.md)
+for the prepared test folder and acceptance checklist.
+
 ## 🧱 How it works
 
 - **Backend** — FastAPI + an in‑process async job queue (one GPU → one job at a time), with a swappable `MusicEngine` adapter (`StubEngine` for GPU‑free UI work, `YuE2Engine` for real generation). SQLite for the library, WebSockets for live progress.

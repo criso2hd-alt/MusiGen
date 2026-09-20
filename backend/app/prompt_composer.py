@@ -6,12 +6,24 @@ when its weights are installed, fall back to Ollama if present, and finally to a
 deterministic template — so they always return something.
 """
 from __future__ import annotations
+import re
 
 from . import llm
 from .ollama_client import ollama
 from .schemas import Pill
 
 _ORDER = ["genre", "mood", "feeling", "instrument", "vocal", "pacing", "era", "keyword"]
+
+
+def suggest_title(lyrics: str, style: str) -> str:
+    """A short local title without loading a second model during submission."""
+    for line in lyrics.splitlines():
+        line = re.sub(r"\[[^\]]*\]", "", line).strip()
+        words = line.split()
+        if words:
+            return " ".join(words[:6]).strip(".,!?;:—- ")[:70] or "New Song"
+    parts = [p.strip() for p in style.split(",") if p.strip()]
+    return " ".join(" ".join(parts[:2]).split()[:6]).title()[:70] or "New Song"
 
 
 def _grouped(pills: list[Pill]) -> dict[str, list[str]]:
@@ -72,7 +84,8 @@ _LYRICS_SYSTEM = (
 
 
 async def write_lyrics(
-    theme: str, pills: list[Pill], structure: list[str]
+    theme: str, pills: list[Pill], structure: list[str], *, duration=120, bpm=None,
+    fit_duration=True, style=""
 ) -> tuple[str, bool]:
     """Write lyrics following the requested [section] structure. (lyrics, used_llm)."""
     mood = compose_style(pills)
@@ -84,8 +97,17 @@ async def write_lyrics(
         f"Section order (use these exact tags, in this order): {order}\n"
         "Write the lyrics now."
     )
+    max_tokens = 800
+    if fit_duration:
+        from .lyric_fit import estimate
+        fit = estimate("\n".join(f"[{s}]" for s in struct), duration, pills, bpm, style)
+        prompt += (f"\nTarget song duration: {duration} seconds, roughly {fit['bpm']} BPM. "
+                   f"Use at most {fit['target_words']} words TOTAL, counting repeated choruses. "
+                   "Leave space for instrumental transitions. Use fewer, shorter lines per section "
+                   "when many sections must fit. Complete the last section within the word budget.")
+        max_tokens = min(2000, max(250, fit["target_words"] * 3 + len(struct) * 12))
     if llm.available():
-        text = await _run_llm(_LYRICS_SYSTEM, prompt, 800, 0.95)
+        text = await _run_llm(_LYRICS_SYSTEM, prompt, max_tokens, 0.95)
         if text:
             return _ensure_tags(text, struct), True
     if await ollama.available():

@@ -8,14 +8,33 @@ import type {
   PillCatalog,
   Playlist,
   Track,
+  LyricFit,
+  SystemStatus,
+  MediaCapabilities, MediaTask,
 } from "./types";
 
 async function j<T>(res: Response): Promise<T> {
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(typeof body?.detail === "string" ? body.detail : `Request failed (${res.status})`);
+  }
   return res.json() as Promise<T>;
 }
 
 export const api = {
+  mediaInstallStatus: () => fetch("/api/media-tools/install").then((r) => j<{status: string; message: string; kind: string | null; started_at: number | null}>(r)),
+  installMedia: (kind: "reference" | "alignment") => fetch(`/api/media-tools/install/${kind}`, {method: "POST"}).then((r) => j(r)),
+  repairMedia: () => fetch("/api/media-tools/repair", {method: "POST"}).then((r) => j<MediaCapabilities>(r)),
+  cancelMediaInstall: () => fetch("/api/media-tools/install-cancel", {method: "POST"}).then((r) => j(r)),
+  mediaTools: () => fetch("/api/media-tools").then((r) => j<MediaCapabilities>(r)),
+  importReference: (file: File) => fetch(`/api/references?filename=${encodeURIComponent(file.name)}`, { method: "POST", body: file }).then((r) => j<MediaTask>(r)),
+  mediaTask: (id: string) => fetch(`/api/media-tasks/${id}`).then((r) => j<MediaTask>(r)),
+  cancelMediaTask: (id: string) => fetch(`/api/media-tasks/${id}/cancel`, { method: "POST" }).then((r) => j(r)),
+  timeLyrics: (id: string) => fetch(`/api/tracks/${id}/lyric-timing`, { method: "POST" }).then((r) => j<MediaTask>(r)),
+  track: (id: string) => fetch(`/api/tracks/${id}`).then((r) => j<Track>(r)),
+  system: () => fetch("/api/system").then((r) => j<SystemStatus>(r)),
+  pauseJob: (id: string) => fetch(`/api/jobs/${id}/pause`, { method: "POST" }).then((r) => j(r)),
+  resumeJob: (id: string) => fetch(`/api/jobs/${id}/resume`, { method: "POST" }).then((r) => j(r)),
   health: () => fetch("/api/health").then((r) => j<any>(r)),
 
   pills: () => fetch("/api/pills").then((r) => j<PillCatalog>(r)),
@@ -58,18 +77,24 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pills, extra, ai }),
-    }).then((r) => j<{ style: string; used_llm: boolean }>(r)),
+    }).then((r) => j<{ style: string; used_llm: boolean; warning?: string | null }>(r)),
 
-  lyrics: (theme: string, pills: Pill[], structure: string[]) =>
+  lyrics: (theme: string, pills: Pill[], structure: string[], duration: number, bpm: number | null | undefined, fit_duration: boolean, style: string) =>
     fetch("/api/lyrics", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ theme, pills, structure }),
-    }).then((r) => j<{ lyrics: string; used_llm: boolean }>(r)),
+      body: JSON.stringify({ theme, pills, structure, duration, bpm, fit_duration, style }),
+    }).then((r) => j<{ lyrics: string; used_llm: boolean; warning: string | null; fit: LyricFit }>(r)),
+  lyricFit: (lyrics: string, pills: Pill[], duration: number, bpm: number | null | undefined, style: string) =>
+    fetch("/api/lyrics/fit", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lyrics, pills, duration, bpm, style }) }).then((r) => j<LyricFit>(r)),
 
   generate: (body: {
     title?: string;
     style?: string;
+    extra?: string;
+    abc?: string;
+    reference_id?: string;
     pills: Pill[];
     lyrics: string;
     options: GenerationOptions;

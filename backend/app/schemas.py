@@ -6,7 +6,7 @@ import uuid
 from enum import Enum
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 def _uid(prefix: str) -> str:
@@ -45,7 +45,11 @@ class GenerationOptions(BaseModel):
     cot: Literal["full", "melody", "off"] = "full"
     seed: int = Field(default_factory=lambda: 831001)
     cfg_scale: Optional[float] = None
-    max_duration: int = 120  # seconds
+    max_duration: int = Field(default=120, ge=15, le=330)  # approximate token-budget ceiling
+    bpm: Optional[int] = Field(default=None, ge=40, le=240)
+    reference_mode: Literal["original", "sing", "backing"] = "original"
+    reference_fit_duration: bool = True
+    memory_mode: Literal["balanced", "low"] = "balanced"
     sampling: SamplingParams = Field(default_factory=SamplingParams)
 
 
@@ -59,9 +63,11 @@ class GenerateRequest(BaseModel):
 
     title: Optional[str] = None
     style: Optional[str] = None
+    extra: str = ""
     pills: list[Pill] = Field(default_factory=list)
     lyrics: str = ""
     abc: Optional[str] = None
+    reference_id: Optional[str] = None
     options: GenerationOptions = Field(default_factory=GenerationOptions)
     engine: Optional[str] = None  # override the default engine ("stub"|"yue2")
 
@@ -71,6 +77,8 @@ class GenerateRequest(BaseModel):
 
 class JobStatus(str, Enum):
     queued = "queued"
+    waiting = "waiting"
+    paused = "paused"
     downloading = "downloading"
     planning = "planning"
     generating = "generating"
@@ -95,15 +103,52 @@ class Job(BaseModel):
     track_id: Optional[str] = None
     error: Optional[str] = None
     eta_seconds: Optional[float] = None
+    started_at: Optional[float] = None
+    run_started_at: Optional[float] = None
+    finished_at: Optional[float] = None
+    elapsed_seconds: float = 0.0
+    completed_units: Optional[int] = None
+    total_units: Optional[int] = None
+    progress_unit: Optional[str] = None
+    pause_requested: bool = False
+    cancel_requested: bool = False
 
 
 # --- Tracks & Playlists ----------------------------------------------------
+
+
+class WordCue(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+    start: float = Field(ge=0, allow_inf_nan=False)
+    end: float = Field(ge=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def valid_interval(self):
+        # Forced aligners can place adjacent short words at the same instant.
+        # Keep that text without inventing a highlight duration.
+        if self.end < self.start:
+            raise ValueError("Word timestamps cannot end before they start")
+        return self
+
+
+class LyricTiming(BaseModel):
+    source: str = "qwen3-asr"
+    language: str = ""
+    text: str = ""
+    words: list[WordCue] = Field(default_factory=list, max_length=10000)
+    created_at: float = Field(default_factory=_now)
 
 
 class Track(BaseModel):
     id: str = Field(default_factory=lambda: _uid("trk"))
     title: str
     style: str = ""
+    extra: Optional[str] = None  # None means this was not recorded by older versions
+    options: Optional[GenerationOptions] = None
+    abc: Optional[str] = None  # supplied score, for restoring the original request
+    generation_meta: dict = Field(default_factory=dict)
+    reference: Optional[dict] = None
+    lyric_timing: Optional[LyricTiming] = None
     lyrics: str = ""
     pills: list[Pill] = Field(default_factory=list)  # the mix used, for Remix
     audio_url: str = ""  # served path, e.g. /media/audio/<file>.flac
@@ -152,17 +197,32 @@ class ComposeRequest(BaseModel):
 class ComposeResponse(BaseModel):
     style: str
     used_llm: bool = False
+    warning: Optional[str] = None
 
 
 class LyricsRequest(BaseModel):
     theme: str = ""
     pills: list[Pill] = Field(default_factory=list)
     structure: list[str] = Field(default_factory=lambda: ["verse", "chorus", "verse", "chorus"])
+    duration: int = Field(default=120, ge=15, le=330)
+    bpm: Optional[int] = Field(default=None, ge=40, le=240)
+    fit_duration: bool = True
+    style: str = ""
 
 
 class LyricsResponse(BaseModel):
     lyrics: str
     used_llm: bool = False
+    warning: Optional[str] = None
+    fit: dict = Field(default_factory=dict)
+
+
+class LyricFitRequest(BaseModel):
+    lyrics: str = ""
+    pills: list[Pill] = Field(default_factory=list)
+    duration: int = Field(default=120, ge=15, le=330)
+    bpm: Optional[int] = Field(default=None, ge=40, le=240)
+    style: str = ""
 
 
 # --- Export ----------------------------------------------------------------

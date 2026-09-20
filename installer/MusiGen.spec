@@ -1,7 +1,20 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('E:/Claude Code/MusiGen/installer/vendor/uv.exe', '.'), ('E:/Claude Code/MusiGen/run_backend.py', '.'), ('E:/Claude Code/MusiGen/backend', 'backend'), ('E:/Claude Code/MusiGen/frontend/dist', 'frontend/dist'), ('E:/Claude Code/MusiGen/installer/musigen.ico', '.'), ('E:/Claude Code/MusiGen/installer/musigen.png', '.')]
+from pathlib import Path
+
+root = Path(SPECPATH).resolve().parent
+installer = root / 'installer'
+# Bundle application sources only, excluding test fixtures and bytecode caches.
+datas = [(str(installer / 'vendor' / 'uv.exe'), '.'),
+         (str(root / 'run_backend.py'), '.'),
+         (str(root / 'backend' / 'requirements.txt'), 'backend'),
+         (str(root / 'frontend' / 'dist'), 'frontend/dist'),
+         (str(installer / 'musigen.ico'), '.'),
+         (str(installer / 'musigen.png'), '.')]
+datas += [(str(p), str(p.parent.relative_to(root)))
+          for p in (root / 'backend' / 'app').rglob('*.py')]
+
 binaries = []
 hiddenimports = ['truststore', 'clr']
 tmp_ret = collect_all('webview')
@@ -13,8 +26,8 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
-    ['E:/Claude Code/MusiGen/installer/bootstrap_gui.py'],
-    pathex=[],
+    [str(installer / 'bootstrap_gui.py')],
+    pathex=[str(installer)],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
@@ -34,6 +47,7 @@ exe = EXE(
     a.datas,
     [],
     name='MusiGen',
+    version=str(installer / 'version_info.txt'),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -46,5 +60,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='E:/Claude Code/MusiGen/installer/musigen.ico',
+    icon=str(installer / 'musigen.ico'),
 )

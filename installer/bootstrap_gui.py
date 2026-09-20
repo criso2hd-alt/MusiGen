@@ -22,6 +22,7 @@ import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from runtime_config import ENGINE_REQUIREMENT, RUNTIME_TAG, TORCH_VERSION
 
 try:
     import truststore
@@ -31,8 +32,6 @@ except Exception:
     pass
 
 APP_NAME = "MusiGen"
-RUNTIME_TAG = "r2"  # bump when backend deps change → forces a one-time re-setup
-                     # (r2: added diffusers + mutagen for cover art & lyric tagging)
 _job_handle = None
 
 
@@ -149,6 +148,24 @@ def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+def _app_port(home: Path) -> int:
+    """Keep the same browser origin so local UI preferences survive restarts."""
+    path = home / "data" / "server-port.json"
+    try:
+        port = int(json.loads(path.read_text(encoding="utf-8"))["port"])
+        if not 1024 <= port <= 65535:
+            raise ValueError("invalid port")
+    except (OSError, ValueError, KeyError, TypeError):
+        port = _free_port()
+        path.write_text(json.dumps({"port": port}), encoding="utf-8")
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        try:
+            probe.bind(("127.0.0.1", port))
+        except OSError as exc:
+            raise RuntimeError(f"MusiGen's saved port {port} is in use. Close the other MusiGen window and reopen this app.") from exc
+    return port
 
 
 def _tcp_ready(port: int, timeout: float = 90) -> bool:
@@ -274,17 +291,22 @@ def _resolve_torch_wheel() -> str:
         m = re.search(r"torch-(\d+)\.(\d+)\.(\d+)", h)
         return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else (0, 0, 0)
 
-    best = max(hrefs, key=ver)
+    expected = tuple(map(int, TORCH_VERSION.split(".")))
+    matches = [href for href in hrefs if ver(href) == expected]
+    if not matches:
+        raise RuntimeError(f"PyTorch {TORCH_VERSION} CUDA wheel was not found")
+    best = matches[0]
     return urljoin(index_url, best)
 
 
 def _download(url: str, dest: Path, base_pct: float, span_pct: float) -> None:
+    temporary = dest.with_suffix(dest.suffix + ".part")
     req = urllib.request.Request(url, headers={"User-Agent": "MusiGen"})
     with urllib.request.urlopen(req, timeout=60) as r:
         total = int(r.headers.get("Content-Length", 0))
         done = 0
         t0 = time.time()
-        with open(dest, "wb") as f:
+        with open(temporary, "wb") as f:
             while True:
                 chunk = r.read(1 << 20)  # 1 MiB
                 if not chunk:
@@ -301,6 +323,9 @@ def _download(url: str, dest: Path, base_pct: float, span_pct: float) -> None:
                     eta_sec=eta,
                     message=f"Downloading PyTorch — {done/1e9:.2f} / {total/1e9:.2f} GB",
                 )
+        if total and done != total:
+            raise RuntimeError("PyTorch download was incomplete. Reopen MusiGen to retry.")
+    temporary.replace(dest)
 
 
 def run_setup(res: Path, home: Path) -> None:
@@ -324,22 +349,26 @@ def run_setup(res: Path, home: Path) -> None:
     runtime = home / "runtime"
     py = runtime / "Scripts" / "python.exe"
 
-    # 2) python env. --clear recreates cleanly if a partial/older runtime exists
-    #    (a re-setup after a version bump would otherwise fail on the existing venv).
-    set_state(phase="runtime", message="Creating the Python runtime…", percent=3)
-    _run([str(uv), "venv", str(runtime), "--python", "3.12", "--clear"])
+    # Reuse an existing Python environment when upgrading. Never clear it merely
+    # because the app's runtime marker changed.
+    if not py.exists():
+        set_state(phase="runtime", message="Creating the Python runtime…", percent=3)
+        _run([str(uv), "venv", str(runtime), "--python", "3.12"])
 
     # 3) torch — download the wheel ourselves for real speed/ETA, then install it
     set_state(phase="torch", message="Resolving PyTorch…", percent=5)
     from urllib.parse import unquote
 
-    wheel_url = _resolve_torch_wheel()
-    fname = unquote(wheel_url.split("/")[-1].split("?")[0].split("#")[0])
-    wheel = home / "downloads" / fname
-    if not wheel.exists():  # reuse a previously downloaded wheel on re-setup
-        _download(wheel_url, wheel, base_pct=6, span_pct=64)  # 6% → 70%
-    set_state(phase="torch", message="Installing PyTorch…", percent=70, speed_mbps=0, eta_sec=0)
-    _run([str(uv), "pip", "install", "--python", str(py), str(wheel)])
+    check = subprocess.run([str(py), "-c", "import importlib.metadata as m; print(m.version('torch'))"],
+                           capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
+    if check.returncode or check.stdout.strip() != f"{TORCH_VERSION}+cu128":
+        wheel_url = _resolve_torch_wheel()
+        fname = unquote(wheel_url.split("/")[-1].split("?")[0].split("#")[0])
+        wheel = home / "downloads" / fname
+        if not wheel.exists():
+            _download(wheel_url, wheel, base_pct=6, span_pct=64)
+        set_state(phase="torch", message="Installing PyTorch…", percent=70, speed_mbps=0, eta_sec=0)
+        _run([str(uv), "pip", "install", "--python", str(py), str(wheel)])
 
     # 4) backend deps
     set_state(phase="deps", message="Installing MusiGen dependencies…", percent=78)
@@ -349,7 +378,7 @@ def run_setup(res: Path, home: Path) -> None:
     # 5) engine
     set_state(phase="engine", message="Installing the YuE2 engine…", percent=90)
     _run([str(uv), "pip", "install", "--python", str(py),
-          "git+https://github.com/multimodal-art-projection/YuE.git", "--no-deps"])
+          ENGINE_REQUIREMENT, "--no-deps"])
 
     (runtime / f".ready-{RUNTIME_TAG}").write_text(RUNTIME_TAG, encoding="utf-8")
     set_state(percent=96, message="Runtime ready.")
@@ -363,7 +392,7 @@ _backend: subprocess.Popen | None = None
 def start_backend(res: Path, home: Path) -> str:
     global _backend
     runtime_py = home / "runtime" / "Scripts" / "python.exe"
-    port = _free_port()
+    port = _app_port(home)
     env = dict(os.environ)
     env["MUSIGEN_FRONTEND_DIST"] = str(res / "frontend" / "dist")
     # Portable storage: models/, music/, data/ all inside the app folder.
@@ -375,11 +404,12 @@ def start_backend(res: Path, home: Path) -> str:
     env.setdefault("MUSIGEN_ENGINE", "yue2")
     env.setdefault("MUSIGEN_YUE2_BACKEND", "torch-eager")
     env["PYTHONPATH"] = str(res / "backend")
-    _backend = subprocess.Popen(
-        [str(runtime_py), str(res / "run_backend.py")],
-        env=env,
-        creationflags=CREATE_NO_WINDOW,
-    )
+    with (home / "data" / "backend.log").open("ab") as log:
+        _backend = subprocess.Popen(
+            [str(runtime_py), str(res / "run_backend.py")],
+            env=env, cwd=str(home), stdout=log, stderr=log,
+            creationflags=CREATE_NO_WINDOW,
+        )
     if not _tcp_ready(port):
         raise RuntimeError("backend did not start")
     return f"http://127.0.0.1:{port}"
@@ -409,7 +439,7 @@ def main() -> int:
     res = res_dir()
     home = app_dir()
     set_state(folder=str(home))
-    runtime_ready = (home / "runtime" / f".ready-{RUNTIME_TAG}").exists()
+    runtime_ready = (home / "runtime" / f".ready-{RUNTIME_TAG}").exists() and (home / "runtime" / "Scripts" / "python.exe").exists()
 
     def worker():
         try:
@@ -497,7 +527,7 @@ def main() -> int:
     # the WinForms window inherits the process icon. Do NOT pass icon= to
     # webview.start(): on Windows it uses System.Drawing.Icon on a .NET thread,
     # and any load hiccup there is an uncatchable crash.
-    webview.start()
+    webview.start(private_mode=False, storage_path=str(home / "data" / "webview"))
     # window closed → tear down backend so VRAM/RAM is released
     _terminate_backend()
     os._exit(0)

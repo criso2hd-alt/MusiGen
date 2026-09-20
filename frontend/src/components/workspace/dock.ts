@@ -8,7 +8,6 @@ export const PANELS: { id: string; title: string }[] = [
   { id: "mixer", title: "Mixer" },
   { id: "lyrics", title: "Lyrics" },
   { id: "options", title: "Options" },
-  { id: "queue", title: "Queue" },
 ];
 
 export const dock = {
@@ -20,6 +19,7 @@ export const dock = {
   },
   /** Focus a panel, adding it back if it was closed. */
   focus(id: string) {
+    if (id === "queue") id = "mixer";
     const api = apiRef;
     if (!api) return;
     const existing = api.getPanel(id);

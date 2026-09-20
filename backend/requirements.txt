@@ -8,6 +8,7 @@ uvicorn[standard]>=0.30
 httpx>=0.27
 python-multipart>=0.0.9
 truststore>=0.9   # use the OS cert store (fixes HF downloads behind SSL interception)
+psutil>=5.9,<8  # CPU/RAM telemetry; NVIDIA metrics use nvidia-smi
 
 # --- YuE2 native runtime deps (torch installed separately, see above) ---
 transformers==4.57.6
@@ -25,5 +26,5 @@ pillow>=10.0
 
 # The YuE2 engine itself. Installed with --no-deps in dev so it keeps our
 # CUDA torch build (the package pins torch==2.10.0; 2.11 is API-compatible):
-#   pip install "git+https://github.com/multimodal-art-projection/YuE.git" --no-deps
-# yue2-infer @ git+https://github.com/multimodal-art-projection/YuE.git
+#   pip install "git+https://github.com/multimodal-art-projection/YuE.git@0edaf2f4053ef4731334b8329834b107977f9637" --no-deps
+# yue2-infer @ git+https://github.com/multimodal-art-projection/YuE.git@0edaf2f4053ef4731334b8329834b107977f9637

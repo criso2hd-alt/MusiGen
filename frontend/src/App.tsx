@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useStore } from "./store";
 import { useJobSocket } from "./hooks/useJobSocket";
+import { StudioTour } from "./components/StudioTour";
+import { SystemMonitor } from "./components/SystemMonitor";
 import { TopBar } from "./components/TopBar";
 import { Workspace } from "./components/workspace/Workspace";
 import { LibraryView } from "./components/library/LibraryView";
@@ -26,6 +28,7 @@ export default function App() {
       <div className="app-backdrop" />
       <div className="flex h-screen flex-col text-[var(--text)]">
         <TopBar />
+        <SystemMonitor />
         {/* Tab content fills the space between the top bar and the player. */}
         {tab === "create" && <Workspace />}
         {tab === "library" && (
@@ -52,6 +55,7 @@ export default function App() {
       <ExpandedPlayer />
       <ExportDialog />
       <Toast />
+      <StudioTour />
     </>
   );
 }

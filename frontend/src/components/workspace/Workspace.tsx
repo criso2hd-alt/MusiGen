@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   DockviewReact,
   themeAbyss,
@@ -20,13 +20,10 @@ import { PillFace } from "../mixer/PillChip";
 import { dockComponents, buildDefaultLayout } from "./panels";
 import { dock } from "./dock";
 
-const LAYOUT_KEY = "mg.layout2"; // bumped: panel set changed (create-only)
+const LAYOUT_KEY = "mg.layout3"; // bumped: panel set changed (create-only)
 
 export function Workspace() {
   const addPill = useStore((s) => s.addPill);
-  const compose = useStore((s) => s.compose);
-  const mixerPills = useStore((s) => s.mixerPills);
-  const extra = useStore((s) => s.extra);
   const [dragging, setDragging] = useState<{
     category: PillCategory;
     label: string;
@@ -36,12 +33,6 @@ export function Workspace() {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
-
-  // Silent prompt composer runs at the workspace level, regardless of panels.
-  useEffect(() => {
-    const t = setTimeout(() => compose(), 350);
-    return () => clearTimeout(t);
-  }, [mixerPills, extra, compose]);
 
   const onReady = (event: DockviewReadyEvent) => {
     dock.set(event.api);

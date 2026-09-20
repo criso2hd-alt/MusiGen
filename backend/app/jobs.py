@@ -9,13 +9,16 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
+import logging
+import re
 from pathlib import Path
 from typing import Optional
 
 from .config import settings
 from .engines import build_engine
-from .engines.base import EngineCancelled, EngineProgress, EngineRequest, MusicEngine
-from .prompt_composer import compose_style
+from .engines.base import EngineCancelled, EnginePaused, EngineProgress, EngineRequest, MusicEngine
+from .checkpoints import read_json, write_json
+from .prompt_composer import compose_style, suggest_title
 from .schemas import GenerateRequest, Job, JobStatus, Track
 
 
@@ -24,6 +27,9 @@ class JobManager:
         self.jobs: dict[str, Job] = {}
         self._queue: "asyncio.Queue[str]" = asyncio.Queue()
         self._cancel_events: dict[str, threading.Event] = {}
+        self._pause_events: dict[str, threading.Event] = {}
+        self._persisted_stage: dict[str, str] = {}
+        self._last_emit: dict[str, float] = {}
         self._requests: dict[str, GenerateRequest] = {}
         self._engines: dict[str, MusicEngine] = {}
         self._subscribers: dict[str, set[asyncio.Queue]] = {}
@@ -35,11 +41,59 @@ class JobManager:
 
     def start(self) -> None:
         self._loop = asyncio.get_running_loop()
+        self._restore()
         self._worker = asyncio.create_task(self._run_worker())
 
     async def stop(self) -> None:
+        for event in self._cancel_events.values():
+            event.set()
         if self._worker:
             self._worker.cancel()
+            try:
+                await self._worker
+            except asyncio.CancelledError:
+                pass
+
+    def _persist(self, job):
+        request = self._requests.get(job.id)
+        write_json(settings.DATA_DIR / "jobs" / f"{job.id}.json", {
+            "job": job.model_dump(), "request": request.model_dump() if request else None})
+
+    def _restore(self):
+        for path in (settings.DATA_DIR / "jobs").glob("job_*.json"):
+            try:
+                data = read_json(path)
+                job = Job.model_validate(data["job"])
+                if not re.fullmatch(r"job_[a-f0-9]{12}", job.id) or path.stem != job.id:
+                    continue
+                if job.status not in {JobStatus.done, JobStatus.cancelled, JobStatus.error}:
+                    req = GenerateRequest.model_validate(data["request"])
+                    if job.run_started_at is not None:
+                        job.elapsed_seconds += max(0, job.updated_at - job.run_started_at)
+                    job.run_started_at = None
+                    if job.cancel_requested:
+                        job.status = JobStatus.cancelled
+                        job.stage = "cancelled"
+                        job.message = "Cancelled before restart"
+                        job.finished_at = job.updated_at
+                    else:
+                        job.status = JobStatus.paused
+                        job.stage = "paused"
+                        job.message = "Interrupted by restart. Resume from the last saved stage."
+                        job.pause_requested = False
+                        self._requests[job.id] = req
+                        self._cancel_events[job.id] = threading.Event()
+                        self._pause_events[job.id] = threading.Event()
+                self.jobs[job.id] = job
+            except Exception:
+                logging.getLogger(__name__).exception("Cannot restore job journal %s", path.name)
+
+    def _finish_run(self, job):
+        if job.run_started_at is not None:
+            job.elapsed_seconds += max(0, time.time() - job.run_started_at)
+            job.run_started_at = None
+        if job.status != JobStatus.paused:
+            job.finished_at = time.time()
 
     def _engine(self, name: str) -> MusicEngine:
         if name not in self._engines:
@@ -65,9 +119,18 @@ class JobManager:
             except asyncio.QueueFull:  # pragma: no cover
                 pass
 
-    def _emit(self, job: Job) -> None:
-        """Thread-safe: push a job snapshot to its channel and the global feed."""
+    def _emit(self, job: Job, *, force=False) -> None:
+        """Called on the event loop; publish a snapshot to the job and global feed."""
         job.updated_at = time.time()
+        changed = self._persisted_stage.get(job.id) != job.stage
+        if changed or force:
+            self._persist(job)
+            self._persisted_stage[job.id] = job.stage
+        # At most four socket updates/second per job, except stage transitions.
+        now = time.monotonic()
+        if not changed and not force and now - self._last_emit.get(job.id, 0) < .25:
+            return
+        self._last_emit[job.id] = now
         event = {"type": "job", "job": job.model_dump()}
         if self._loop is None:
             return
@@ -150,18 +213,39 @@ class JobManager:
     # -- submission --------------------------------------------------------
 
     async def submit(self, req: GenerateRequest) -> Job:
-        style = req.style or compose_style(req.pills)
+        req = req.model_copy(deep=True)
+        if req.reference_id:
+            from .media_tasks import media_tasks
+            reference = media_tasks.reference(req.reference_id)
+            req.abc = reference["abc"]
+            req.options.cot = "melody"
+        if req.abc and req.options.reference_mode != "original":
+            from .reference_arrangement import arrange
+            # Validate source/lyrics/length before occupying the GPU. Backing
+            # mode replaces this provisional vocal line with a planned one.
+            arrange(req.abc, req.lyrics, "sing", req.options.max_duration,
+                    req.options.reference_fit_duration, req.options.bpm)
+        if req.engine and req.engine not in {"stub", "yue2"}:
+            raise ValueError("Unknown generation engine")
+        base = compose_style(req.pills)
+        if req.extra.strip():
+            base = f"{base}, {req.extra.strip()}" if base else req.extra.strip()
+        style = req.style or base
+        # Keep the editable prompt separate from the derived model input so
+        # restoring a recipe and changing its BPM cannot accumulate tempo hints.
+        req.style = style
+        if req.options.bpm:
+            style = f"{style}, {req.options.bpm} BPM"
         engine_name = (req.engine or settings.ENGINE).lower()
         job = Job(
-            title=req.title or (style[:40] if style else "Untitled"),
+            title=(req.title or "").strip() or suggest_title(req.lyrics, style),
             style=style,
             engine=engine_name,
         )
-        # stash the resolved style back onto the request for the worker
-        req.style = style
         self.jobs[job.id] = job
         self._requests[job.id] = req
         self._cancel_events[job.id] = threading.Event()
+        self._pause_events[job.id] = threading.Event()
         await self._queue.put(job.id)
         self._emit(job)
         return job
@@ -170,13 +254,49 @@ class JobManager:
         job = self.jobs.get(job_id)
         if not job:
             return False
+        if job.status in {JobStatus.done, JobStatus.error, JobStatus.cancelled}:
+            return False
         ev = self._cancel_events.get(job_id)
         if ev:
             ev.set()
-        if job.status == JobStatus.queued:
+        job.cancel_requested = True
+        if job.status in {JobStatus.queued, JobStatus.paused}:
             job.status = JobStatus.cancelled
             job.stage = "cancelled"
+            self._finish_run(job)
             self._emit(job)
+            self._cleanup(job_id)
+        else:
+            job.message = "Cancellation requested; waiting for a safe interruption point"
+            self._emit(job, force=True)
+        return True
+
+    def pause(self, job_id: str) -> bool:
+        job = self.jobs.get(job_id)
+        if not job or job.engine != "yue2" or job.status in {JobStatus.done, JobStatus.error, JobStatus.cancelled, JobStatus.paused} or job.cancel_requested:
+            return False
+        self._pause_events[job_id].set()
+        job.pause_requested = True
+        if job.status == JobStatus.queued:
+            job.status = JobStatus.paused
+            job.stage = "paused"
+            job.pause_requested = False
+        job.message = "Paused" if job.status == JobStatus.paused else "Pause requested; will stop after the current stage"
+        self._emit(job, force=True)
+        return True
+
+    async def resume(self, job_id: str) -> bool:
+        job = self.jobs.get(job_id)
+        if not job or job.status != JobStatus.paused or job_id not in self._requests:
+            return False
+        self._pause_events[job_id].clear()
+        self._cancel_events[job_id].clear()
+        job.status = JobStatus.queued
+        job.stage = "queued"
+        job.pause_requested = False
+        job.message = "Queued to resume from saved stages"
+        await self._queue.put(job_id)
+        self._emit(job)
         return True
 
     # -- worker ------------------------------------------------------------
@@ -185,9 +305,8 @@ class JobManager:
         while True:
             job_id = await self._queue.get()
             job = self.jobs.get(job_id)
-            if not job:
-                continue
-            if job.status == JobStatus.cancelled:
+            if not job or job.status != JobStatus.queued:
+                self._queue.task_done()
                 continue
             try:
                 await self._run_job(job_id)
@@ -195,19 +314,27 @@ class JobManager:
                 job = self.jobs.get(job_id)
                 if job:
                     job.status = JobStatus.error
+                    job.stage = "error"
                     job.error = str(exc)
                     job.message = f"Error: {exc}"
+                    self._finish_run(job)
                     self._emit(job)
+                    self._cleanup(job_id)
+            finally:
+                self._queue.task_done()
 
     async def _run_job(self, job_id: str) -> None:
         job = self.jobs[job_id]
         req = self._requests[job_id]
         cancel_event = self._cancel_events[job_id]
+        pause_event = self._pause_events.get(job_id, threading.Event())
+        job.started_at = job.started_at or time.time()
+        job.run_started_at = time.time()
         engine = self._engine(job.engine)
 
         out_path = settings.AUDIO_DIR / f"{job.id}.flac"
         eng_req = EngineRequest(
-            style=req.style or "",
+            style=job.style,
             lyrics=req.lyrics,
             out_path=out_path,
             cot=req.options.cot,
@@ -219,6 +346,12 @@ class JobManager:
             top_p=req.options.sampling.top_p,
             top_k=req.options.sampling.top_k,
             repetition_penalty=req.options.sampling.repetition_penalty,
+            checkpoint_dir=settings.DATA_DIR / "checkpoints" / job_id,
+            is_pause_requested=pause_event.is_set,
+            reference_mode=req.options.reference_mode,
+            reference_fit_duration=req.options.reference_fit_duration,
+            arrangement_bpm=req.options.bpm,
+            memory_mode=req.options.memory_mode,
         )
 
         def is_cancelled() -> bool:
@@ -238,7 +371,7 @@ class JobManager:
             job.message = "Preparing model download…"
             self._emit(job)
 
-            def on_dl(frac, speed_mbps, eta, done, total) -> None:
+            def apply_download(frac, speed_mbps, eta, done, total) -> None:
                 j = self.jobs.get(job_id)
                 if not j:
                     return
@@ -253,6 +386,9 @@ class JobManager:
                 )
                 self._emit(j)
 
+            def on_dl(frac, speed_mbps, eta, done, total) -> None:
+                loop.call_soon_threadsafe(apply_download, frac, speed_mbps, eta, done, total)
+
             try:
                 await loop.run_in_executor(
                     None,
@@ -265,6 +401,7 @@ class JobManager:
                 job.status = JobStatus.cancelled
                 job.stage = "cancelled"
                 job.message = "Cancelled"
+                self._finish_run(job)
                 self._emit(job)
                 self._cleanup(job_id)
                 return
@@ -275,7 +412,7 @@ class JobManager:
         job.message = "Starting"
         self._emit(job)
 
-        def on_progress(p: EngineProgress) -> None:
+        def apply_progress(p: EngineProgress) -> None:
             j = self.jobs.get(job_id)
             if not j:
                 return
@@ -285,19 +422,42 @@ class JobManager:
                 pass
             j.stage = p.stage
             j.progress = p.progress
-            j.message = p.message
+            j.message = p.message + (" · pause pending" if j.pause_requested else "")
+            j.completed_units, j.total_units, j.progress_unit = p.completed, p.total, p.unit
             self._emit(j)
+
+        def on_progress(p: EngineProgress) -> None:
+            loop.call_soon_threadsafe(apply_progress, p)
 
         try:
             result = await loop.run_in_executor(
                 None, engine.generate, eng_req, on_progress, is_cancelled
             )
+        except EnginePaused:
+            job.status = JobStatus.paused
+            job.stage = "paused"
+            job.pause_requested = False
+            job.message = "Paused at a saved stage; other songs can now generate"
+            self._finish_run(job)
+            self._emit(job)
+            return
         except EngineCancelled:
             job.status = JobStatus.cancelled
             job.stage = "cancelled"
             job.message = "Cancelled"
+            self._finish_run(job)
             self._emit(job)
             out_path.unlink(missing_ok=True)
+            self._cleanup(job_id)
+            return
+
+        if cancel_event.is_set():
+            job.status = JobStatus.cancelled
+            job.stage = "cancelled"
+            job.message = "Cancelled"
+            self._finish_run(job)
+            out_path.unlink(missing_ok=True)
+            self._emit(job)
             self._cleanup(job_id)
             return
 
@@ -306,6 +466,11 @@ class JobManager:
             style=req.style or "",
             lyrics=req.lyrics,
             pills=req.pills,
+            extra=req.extra,
+            options=req.options.model_copy(deep=True),
+            abc=req.abc,
+            generation_meta={**result.meta, "resolved_style": job.style},
+            reference=self._reference_metadata(req),
             audio_url=f"/media/audio/{result.audio_path.name}",
             duration=result.duration,
             sample_rate=result.sample_rate,
@@ -319,8 +484,9 @@ class JobManager:
         job.status = JobStatus.done
         job.stage = "done"
         job.progress = 1.0
-        job.message = "Complete"
+        job.message = "Complete — generation limit reached; ending may be cut short" if result.meta.get("truncated") else "Complete"
         job.track_id = track.id
+        self._finish_run(job)
         self._emit(job)
         # let listeners know a new track exists
         if self._loop:
@@ -332,6 +498,14 @@ class JobManager:
     def _cleanup(self, job_id: str) -> None:
         self._requests.pop(job_id, None)
         self._cancel_events.pop(job_id, None)
+        self._pause_events.pop(job_id, None)
+
+    @staticmethod
+    def _reference_metadata(req):
+        if not req.reference_id:
+            return None
+        from .media_tasks import media_tasks
+        return {k: v for k, v in media_tasks.reference(req.reference_id).items() if k != "abc"}
 
 
 jobs = JobManager()

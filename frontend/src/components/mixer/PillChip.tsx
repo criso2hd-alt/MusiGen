@@ -21,6 +21,7 @@ export function PillFace({
         floating ? "cursor-grabbing shadow-2xl" : "cursor-grab"
       )}
       style={{
+        fontSize: "var(--ingredient-size, 10px)",
         borderColor: "color-mix(in srgb, var(--cat) 45%, transparent)",
         background: "color-mix(in srgb, var(--cat) 16%, transparent)",
         color: "color-mix(in srgb, var(--cat) 88%, white)",

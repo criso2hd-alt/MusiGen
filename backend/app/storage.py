@@ -67,6 +67,19 @@ class Storage:
             self._db.commit()
             return cur.rowcount > 0
 
+    def set_lyric_timing(self, track_id: str, timing: dict) -> bool:
+        """Merge analysis atomically without resurrecting deletes or losing edits."""
+        with self._lock:
+            row = self._db.execute("SELECT data FROM tracks WHERE id=?", (track_id,)).fetchone()
+            if not row:
+                return False
+            data = json.loads(row["data"])
+            data["lyric_timing"] = timing
+            track = Track.model_validate(data)
+            self._db.execute("UPDATE tracks SET data=? WHERE id=?", (track.model_dump_json(), track_id))
+            self._db.commit()
+            return True
+
     # -- playlists ---------------------------------------------------------
 
     def add_playlist(self, pl: Playlist) -> Playlist:

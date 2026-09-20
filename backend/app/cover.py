@@ -8,6 +8,7 @@ engine or lyric model needs the GPU (see llm._load / yue2_engine.generate).
 from __future__ import annotations
 
 import threading
+from .gpu import model_operation
 from pathlib import Path
 
 _lock = threading.RLock()
@@ -25,6 +26,7 @@ def is_loaded() -> bool:
     return _pipe is not None
 
 
+@model_operation()
 def unload() -> None:
     """Drop the resident SD-Turbo pipeline and free its VRAM."""
     global _pipe, _device
@@ -92,6 +94,7 @@ def _ensure_pipe():
     _device = dev
 
 
+@model_operation(wait=False, name="Cover art generation")
 def generate(
     prompt: str,
     out_path: Path,

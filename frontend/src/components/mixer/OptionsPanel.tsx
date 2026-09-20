@@ -93,11 +93,11 @@ export function OptionsPanel() {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <label className="block" title="Random seed. The same seed with identical settings reproduces the exact same song. Change it (or roll the dice) for a different take.">
+        <label className="block" title="The seed helps reproduce a song with the same recipe, model and runtime. Results can vary across hardware or software versions.">
           <div className="mb-1 text-xs">
             <Label
               text="Seed"
-              hint="Random seed. Same seed + same settings = the exact same song. Change it (or roll the dice) for a different variation."
+              hint="Reuse the seed and recipe for a similar result. Change the seed for a different variation; hardware and software versions can affect reproducibility."
             />
           </div>
           <div className="flex gap-1">
@@ -117,16 +117,31 @@ export function OptionsPanel() {
           </div>
         </label>
         <Slider
-          label="Duration"
-          hint="Approximate song length in seconds. Longer songs take more time and VRAM (very long ones may spill to shared memory)."
+          label="Duration budget"
+          hint="Approximate token budget, not an exact ending time. Longer songs use more memory. The 245–330s range is experimental."
           value={options.max_duration}
           min={15}
-          max={240}
+          max={330}
           step={5}
           onChange={(v) => setOptions({ max_duration: v })}
           fmt={(v) => `${v}s`}
         />
       </div>
+
+      <div className="my-3 grid grid-cols-2 gap-3 text-xs">
+        <label>Tempo hint (BPM)
+          <input type="number" min={40} max={240} placeholder="Automatic" value={options.bpm ?? ""}
+            onChange={(e) => setOptions({ bpm: e.target.value === "" ? null : Math.max(40, Math.min(240, Number(e.target.value))) })}
+            className="mt-1 w-full rounded-lg bg-black/30 px-3 py-2" />
+        </label>
+        <label>Memory mode
+          <select value={options.memory_mode ?? "balanced"} onChange={(e) => setOptions({ memory_mode: e.target.value as "balanced" | "low" })} className="mt-1 w-full rounded-lg bg-[#10131e] px-2 py-2">
+            <option value="balanced">Standard</option><option value="low">Lower VRAM · experimental</option>
+          </select>
+        </label>
+      </div>
+      {options.memory_mode === "low" && <p className="mb-3 text-xs text-[var(--muted)]">Moves unused composition weights to RAM during synthesis. May reduce VRAM use; speed depends on your system.</p>}
+      {options.max_duration > 240 && <p className="mb-3 text-xs text-amber-300">Long-song mode is experimental and may need substantially more memory.</p>}
 
       <Slider
         label="Temperature"

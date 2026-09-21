@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { foreground } from './foreground';
 import { canvasTexture } from './textures';
 
 /** A small listening deck, attached to the inspection camera and driven by the real player. */
@@ -31,6 +32,7 @@ export function createListeningDeck(camera: THREE.Camera) {
   cylinder(pivot,.048,.08,black);cylinder(pivot,.027,.09,silver);
   const arm=new THREE.Group();arm.position.y=.05;pivot.add(arm);
   box(arm,0,0,.18,.018,.018,.43,silver);box(arm,0,0,-.08,.07,.06,.07,black);box(arm,-.015,-.01,.397,.043,.024,.07,gold);
+  foreground(rig);foreground(record);
   let requested=false,progress=0,spin=0,armAngle=0;
   const discStart=new THREE.Vector3(-.53,.07,-1.43),discClear=new THREE.Vector3(.08,.1,-1.4),platter=new THREE.Vector3();
   const upright=new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI/2,0,0));

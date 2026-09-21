@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { foreground, FOREGROUND_LAYER, renderStore } from './foreground';
 import { createListeningDeck } from './turntable';
 import type { Track } from '../../../lib/types';
 import { audioEngine } from '../../../lib/audio';
@@ -14,6 +15,7 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
   playing: (id: string) => boolean; play: (track: Track) => void; visualizer: () => void; error: (message: string) => void;
 }): StoreControls {
   const renderer=new THREE.WebGLRenderer({antialias:quality==='balanced',powerPreference:'low-power'});
+  renderer.info.autoReset=false;
   renderer.setPixelRatio(Math.min(devicePixelRatio,quality==='balanced'?1.5:1));
   renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.4;
   const canvas=renderer.domElement;canvas.tabIndex=0;canvas.setAttribute('aria-label','3D record store. Shift captures mouse; WASD walks; F inspects; Space plays.');
@@ -28,8 +30,8 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
   const cubeGeometry=own(new THREE.BoxGeometry(1,1,1));const planeGeometry=own(new THREE.PlaneGeometry(1,1));
   const box=(x:number,y:number,z:number,w:number,h:number,d:number,mat:THREE.Material,parent:THREE.Object3D=scene)=>{const mesh=new THREE.Mesh(cubeGeometry,mat);mesh.position.set(x,y,z);mesh.scale.set(w,h,d);parent.add(mesh);return mesh;};
   const panel=(texture:THREE.Texture,x:number,y:number,z:number,w:number,h:number,rotation=0,parent:THREE.Object3D=scene)=>{own(texture);const mat=own(new THREE.MeshBasicMaterial({map:texture,toneMapped:false}));const mesh=new THREE.Mesh(planeGeometry,mat);mesh.position.set(x,y,z);mesh.scale.set(w,h,1);mesh.rotation.y=rotation;parent.add(mesh);return mesh;};
-  scene.add(new THREE.HemisphereLight('#d7e2ff','#88654f',2.8));
-  const keyLight=new THREE.DirectionalLight('#ffe3bf',2);keyLight.position.set(0,4,5);scene.add(keyLight);
+  const fillLight=new THREE.HemisphereLight('#d7e2ff','#88654f',2.8);fillLight.layers.enable(FOREGROUND_LAYER);scene.add(fillLight);
+  const keyLight=new THREE.DirectionalLight('#ffe3bf',2);keyLight.position.set(0,4,5);keyLight.layers.enable(FOREGROUND_LAYER);scene.add(keyLight);
   // The room is authored in Blender. Its lightmap preserves the lighting without runtime shadows.
   host.dataset.loading='true';
   new GLTFLoader().load('/store/neon-boutique.glb',gltf=>{
@@ -86,7 +88,7 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
     if(inspected){returnRecord();return;}
     const data=target?.userData.target as StoreTarget|undefined;if(!data)return;
     if(data.action==='visualizer'){release();callbacks.visualizer();return;}
-    inspected=target as THREE.Mesh;inspection=inspected.clone();camera.add(inspection);sleeveHome();inspection.position.copy(homePosition);inspection.quaternion.copy(homeQuaternion);startPosition.copy(homePosition);startQuaternion.copy(homeQuaternion);inspection.scale.setScalar(1);rotation=0;phase='lifting';transition=0;inspected.visible=false;callbacks.inspection(data.track!);
+    inspected=target as THREE.Mesh;inspection=inspected.clone();foreground(inspection);camera.add(inspection);sleeveHome();inspection.position.copy(homePosition);inspection.quaternion.copy(homeQuaternion);startPosition.copy(homePosition);startQuaternion.copy(homeQuaternion);inspection.scale.setScalar(1);rotation=0;phase='lifting';transition=0;inspected.visible=false;callbacks.inspection(data.track!);
   };
   const play=()=>{
     if(phase==='returning')return;
@@ -168,10 +170,10 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
     host.dataset.vinylSpinning=String(deckState.spinning);host.dataset.vinylAngle=String(deckState.angle);
     host.dataset.recordState=phase;host.dataset.deckState=deckRequested?(deckState.settled?'playing-position':'loading-record'):'stowed';
     if(time-lastScreen>100){drawScreen(time);lastScreen=time;}
-    renderer.render(scene,camera);
+    renderer.info.reset();renderStore(renderer,scene,camera);
     host.dataset.drawCalls=String(renderer.info.render.calls);host.dataset.triangles=String(renderer.info.render.triangles);
   };drawScreen(0);frame=requestAnimationFrame(animate);
-  return {capture,freeLook:()=>canvas.focus(),inspect,play,flip:()=>{rotation+=Math.PI;if(inspection){inspection.rotation.y=rotation;renderer.render(scene,camera);}},home:()=>{deck.close();finishReturn();camera.position.set(0,1.65,6.5);yaw=0;pitch=-.12;},dispose:()=>{
+  return {capture,freeLook:()=>canvas.focus(),inspect,play,flip:()=>{rotation+=Math.PI;if(inspection){inspection.rotation.y=rotation;renderStore(renderer,scene,camera);}},home:()=>{deck.close();finishReturn();camera.position.set(0,1.65,6.5);yaw=0;pitch=-.12;},dispose:()=>{
     disposed=true;Object.assign(visit,{x:camera.position.x,z:camera.position.z,yaw,pitch});cancelAnimationFrame(frame);release();observer.disconnect();
     canvas.removeEventListener('contextmenu',contextmenu);canvas.removeEventListener('webglcontextlost',contextlost);
     window.removeEventListener('keydown',keydown);window.removeEventListener('keyup',keyup);window.removeEventListener('mousemove',mousemove);window.removeEventListener('mousedown',mousedown);window.removeEventListener('mouseup',mouseup);window.removeEventListener('blur',blur);

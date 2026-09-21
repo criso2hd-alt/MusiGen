@@ -26,3 +26,20 @@ The room is lazy-loaded, capped at 45 FPS (Balanced) or 30 FPS (Low), and stops 
 TypeScript/Vite build and the 17 frontend tests pass, including collision bounds, generation guards and playlist scope. Browser checks exercised real local cover/audio loading, sleeve selection, playback progress, turntable presentation, spin-on/play and stop-on/pause state, sleeve return, and simulated busy-state unloading. Pointer capture is denied by the Codex browser; native WebView2 capture still needs user acceptance testing in the EXE. This is an experimental first art pass, not a final visual-quality sign-off.
 
 Three.js and its GLTFLoader use the MIT license; see `frontend/public/store/THREE-LICENSE.txt`. Blender scene geometry/materials are generated locally by the included script.
+
+
+## User-optimized scene update
+
+The editable scene is now the user's optimized mesh (41,600 exported triangles).
+Do not regenerate it with `build_store.py`: that would replace the user's work.
+Use `bake_edited.py` with the existing .blend instead. It never saves over the
+source; it verifies its SHA-256 remains unchanged. Existing poster UVs are pinned
+and procedural Generated coordinates are preserved before joining. A separate
+non-overlapping Lightmap UV is packed for an 8192px combined bake. The exported
+room uses one mesh primitive/material. The larger atlas favors poster/wood detail;
+its uncompressed GPU cost is about 341 MiB including mipmaps.
+
+`verify_store_glb.py` checks UV bounds, non-degenerate triangles and sampled
+interior overlaps directly in the exported GLB. Preview PNGs show the source and
+baked scene from the same camera. Old app-created poster planes were removed;
+posters now come entirely from the edited Blender model.

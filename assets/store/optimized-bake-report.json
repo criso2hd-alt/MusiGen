@@ -1,0 +1,10 @@
+{
+  "source_sha256": "690b000d48b90b3b39fbdcede09a12293ad75235612b5b8fdbaeace24e326d7c",
+  "source_triangles": 41600,
+  "objects": 21,
+  "missing_images": [],
+  "export_triangles": 41600,
+  "uv_out_of_bounds": 0,
+  "uv_degenerate_triangles": 0,
+  "zero_area_geometry": 0
+}

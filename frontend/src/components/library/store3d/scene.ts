@@ -5,7 +5,7 @@ import { createListeningDeck } from './turntable';
 import type { Track } from '../../../lib/types';
 import { audioEngine } from '../../../lib/audio';
 import { BINS, canStand } from './layout';
-import { posterTexture, signTexture, sleeveTexture, woodTexture } from './textures';
+import { signTexture, sleeveTexture, woodTexture } from './textures';
 
 export type Visit = { x: number; z: number; yaw: number; pitch: number };
 export type StoreTarget = { title: string; track?: Track; action?: 'visualizer' };
@@ -49,7 +49,6 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
   },undefined,()=>{if(!disposed){host.dataset.loading='false';callbacks.error('The store model could not load. Exit the store and try again.');}});
   const screenCanvas=document.createElement('canvas');screenCanvas.width=768;screenCanvas.height=256;const screenCtx=screenCanvas.getContext('2d')!;const screenTexture=own(new THREE.CanvasTexture(screenCanvas));screenTexture.colorSpace=THREE.SRGBColorSpace;
   const screen=panel(screenTexture,0,1.95,-8.97,5.7,1.23);screen.userData.target={title:'Open full-screen visualizer',action:'visualizer'} satisfies StoreTarget;
-  for(const side of [-1,1])for(let i=0;i<3;i++)panel(posterTexture(i+(side===1?1:0)),side*6.27,2.48,4-i*4,1.5,2.1,side===-1?Math.PI/2:-Math.PI/2);
   // Every sleeve faces the entrance, with raised rows visible above those in front.
   const actionMeshes:THREE.Object3D[]=[screen];
   const textureLoader=new THREE.TextureLoader();let trackIndex=0;

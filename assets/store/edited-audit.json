@@ -1,0 +1,364 @@
+{
+  "objects": [
+    {
+      "name": "Wall neon.003",
+      "triangles": 32,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Rose neon"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Wall neon.007",
+      "triangles": 32,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Ice neon"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Terrazzo floor",
+      "triangles": 2,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Dark terrazzo"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Rear wall",
+      "triangles": 1404,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Charcoal plaster",
+        "Quarter-sawn walnut",
+        "Brushed champagne metal",
+        "Black felt",
+        "Rose neon",
+        "Ice neon"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Walnut wainscot",
+      "triangles": 104,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Quarter-sawn walnut",
+        "Brushed champagne metal"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Neon mounting channel.003",
+      "triangles": 62,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Soft black lacquer"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Neon mounting channel.007",
+      "triangles": 64,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Soft black lacquer"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Counter plinth",
+      "triangles": 188,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Soft black lacquer"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Walnut loudspeaker.001",
+      "triangles": 1020,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Quarter-sawn walnut",
+        "Black felt",
+        "Polished aluminum",
+        "Speaker rubber",
+        "Soft black lacquer"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Isle.001",
+      "triangles": 2988,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Soft black lacquer",
+        "Quarter-sawn walnut",
+        "Black felt",
+        "Brushed champagne metal"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Headphone ear cushion",
+      "triangles": 8238,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Speaker rubber",
+        "Soft black lacquer",
+        "Polished aluminum",
+        "Quarter-sawn walnut",
+        "Rose neon",
+        "Warm ivory",
+        "Charcoal plaster",
+        "Brushed champagne metal",
+        "Poster1",
+        "Poster2",
+        "Poster3"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Entrance brass threshold",
+      "triangles": 128,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Brushed champagne metal"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Front wall.001",
+      "triangles": 2,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Charcoal plaster"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Side wall.003",
+      "triangles": 8614,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Charcoal plaster",
+        "Ice neon",
+        "Soft black lacquer",
+        "Quarter-sawn walnut",
+        "Speaker rubber",
+        "Polished aluminum",
+        "Rose neon",
+        "Warm ivory",
+        "Brushed champagne metal",
+        "Poster3",
+        "Poster1",
+        "Poster2"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Acoustic ceiling.001",
+      "triangles": 1646,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Soft black lacquer",
+        "Warm lamps"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Walnut loudspeaker.002",
+      "triangles": 2136,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Quarter-sawn walnut",
+        "Black felt",
+        "Polished aluminum",
+        "Speaker rubber",
+        "Soft black lacquer",
+        "Ice neon",
+        "Brushed champagne metal"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Isle.002",
+      "triangles": 2988,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Soft black lacquer",
+        "Quarter-sawn walnut",
+        "Black felt",
+        "Brushed champagne metal"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Isle.003",
+      "triangles": 2988,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Soft black lacquer",
+        "Quarter-sawn walnut",
+        "Black felt",
+        "Brushed champagne metal"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Isle.004",
+      "triangles": 2988,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Soft black lacquer",
+        "Quarter-sawn walnut",
+        "Black felt",
+        "Brushed champagne metal"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Isle.005",
+      "triangles": 2988,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Soft black lacquer",
+        "Quarter-sawn walnut",
+        "Black felt",
+        "Brushed champagne metal"
+      ],
+      "modifiers": []
+    },
+    {
+      "name": "Isle.006",
+      "triangles": 2988,
+      "hidden": false,
+      "uv": [
+        "UVMap"
+      ],
+      "materials": [
+        "Soft black lacquer",
+        "Quarter-sawn walnut",
+        "Black felt",
+        "Brushed champagne metal"
+      ],
+      "modifiers": []
+    }
+  ],
+  "images": [
+    {
+      "name": "after-hours.png",
+      "path": "E:\\Claude Code\\MusiGen\\assets\\store\\posters\\after-hours.png",
+      "packed": false,
+      "size": [
+        1122,
+        1402
+      ],
+      "source": "FILE"
+    },
+    {
+      "name": "analog-soul.png",
+      "path": "E:\\Claude Code\\MusiGen\\assets\\store\\posters\\analog-soul.png",
+      "packed": false,
+      "size": [
+        1122,
+        1402
+      ],
+      "source": "FILE"
+    },
+    {
+      "name": "Render Result",
+      "path": "",
+      "packed": false,
+      "size": [
+        0,
+        0
+      ],
+      "source": "VIEWER"
+    },
+    {
+      "name": "side-a-side-b.png",
+      "path": "E:\\Claude Code\\MusiGen\\assets\\store\\posters\\side-a-side-b.png",
+      "packed": false,
+      "size": [
+        1122,
+        1402
+      ],
+      "source": "FILE"
+    },
+    {
+      "name": "Viewer Node",
+      "path": "",
+      "packed": false,
+      "size": [
+        256,
+        256
+      ],
+      "source": "VIEWER"
+    }
+  ]
+}

@@ -13,7 +13,7 @@ function Room({tracks, label, quality, visit, onExit, exitRef}: {tracks:Track[];
   const [target,setTarget]=useState<StoreTarget|null>(null), [inspection,setInspection]=useState<Track|null>(null), [captured,setCaptured]=useState(false), [error,setError]=useState(''), [freeLook,setFreeLook]=useState(false);
   useEffect(()=>{
     if(!host.current)return;
-    try { controls.current=createStoreScene(host.current,tracks,label,visit,quality,{
+    try { controls.current=createStoreScene(host.current,tracks,visit,quality,{
       target:setTarget,inspection:setInspection,capture:setCaptured,error:setError,
       playing:(id)=>{const state=useStore.getState();return state.current?.id===id&&state.isPlaying;},
       play:(track)=>{setError('');void useStore.getState().playTrack(track).catch((e)=>setError(`Could not play: ${String(e)}`));},

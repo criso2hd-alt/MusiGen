@@ -11,7 +11,7 @@ import { signTexture, sleeveTexture, woodTexture } from './textures';
 export type Visit = { x: number; z: number; yaw: number; pitch: number };
 export type StoreTarget = { title: string; track?: Track; action?: 'visualizer' };
 export type StoreControls = { exit: (complete:()=>void) => void; capture: () => void; freeLook: () => void; inspect: () => void; play: () => void; flip: () => void; home: () => void; dispose: () => void };
-export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfName: string, visit: Visit, quality: 'balanced' | 'low', callbacks: {
+export function createStoreScene(host: HTMLDivElement, tracks: Track[], visit: Visit, quality: 'balanced' | 'low', callbacks: {
   target: (target: StoreTarget | null) => void; inspection: (track: Track | null) => void; capture: (locked: boolean) => void;
   playing: (id: string) => boolean; play: (track: Track) => void; visualizer: () => void; error: (message: string) => void;
 }): StoreControls {
@@ -69,7 +69,6 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
   const textureLoader=new THREE.TextureLoader();let trackIndex=0;
   const sleeveGeometry=own(new THREE.BoxGeometry(.82,.82,.045));
   for(const [binIndex,bin] of BINS.entries()){
-    panel(signTexture(shelfName.toUpperCase(),`CRATE ${String(binIndex+1).padStart(2,'0')} • MUSIGEN`,'#eee0c8'),bin.x,.42,bin.z+bin.depth/2+.03,2.8,.48);
     for(let row=0;row<2;row++)for(let col=0;col<3;col++){
       const x=bin.x+(col-1)*1.05,z=bin.z+.25-row*.62,y=1.13+row*.28;
       const track=tracks[trackIndex++];

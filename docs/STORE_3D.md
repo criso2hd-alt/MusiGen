@@ -43,3 +43,13 @@ its uncompressed GPU cost is about 341 MiB including mipmaps.
 interior overlaps directly in the exported GLB. Preview PNGs show the source and
 baked scene from the same camera. Old app-created poster planes were removed;
 posters now come entirely from the edited Blender model.
+
+
+## Entrance lighting and counter screen
+
+A small `neon-fixtures.glb`, exported from the edited scene by `export_neon.py`,
+keeps the pink/cyan neon lit during a 2.8-second entrance fade. The baked room
+brightness ramps up without adding real-time shadows. Reduced-motion preferences
+skip the fade. This adds a few neon-only draw calls to the one-material room.
+The back-wall canvas sits in front of the recessed panel and displays live audio
+frequency bars plus a waveform, with an idle message when playback is paused.

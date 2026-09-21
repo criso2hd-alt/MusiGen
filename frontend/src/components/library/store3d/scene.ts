@@ -34,6 +34,8 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
   const keyLight=new THREE.DirectionalLight('#ffe3bf',2);keyLight.position.set(0,4,5);keyLight.layers.enable(FOREGROUND_LAYER);scene.add(keyLight);
   // The room is authored in Blender. Its lightmap preserves the lighting without runtime shadows.
   host.dataset.loading='true';
+  const roomMaterials=new Set<THREE.MeshBasicMaterial>();let lightsReady=false,lightsTime=0;
+  const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   new GLTFLoader().load('/store/neon-boutique.glb',gltf=>{
     const assets=new Set<{dispose:()=>void}>();
     gltf.scene.traverse(object=>{
@@ -41,14 +43,26 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
       assets.add(object.geometry);
       for(const mat of Array.isArray(object.material)?object.material:[object.material]){
         assets.add(mat);
+        if(mat instanceof THREE.MeshBasicMaterial){roomMaterials.add(mat);mat.color.setScalar(reducedMotion?1:.08);}
         for(const value of Object.values(mat))if(value instanceof THREE.Texture){assets.add(value);value.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());}
       }
     });
     if(disposed){assets.forEach(asset=>asset.dispose());return;}
-    assets.forEach(asset=>resources.add(asset));scene.add(gltf.scene);host.dataset.loading='false';
+    assets.forEach(asset=>resources.add(asset));scene.add(gltf.scene);
+    new GLTFLoader().load('/store/neon-fixtures.glb',neon=>{
+      neon.scene.traverse(object=>{
+        if(!(object instanceof THREE.Mesh))return;
+        if(disposed){object.geometry.dispose();for(const m of Array.isArray(object.material)?object.material:[object.material])m.dispose();return;}
+        own(object.geometry);
+        const convert=(m:THREE.MeshStandardMaterial)=>{own(m);return own(new THREE.MeshBasicMaterial({color:m.emissive.clone().multiplyScalar(m.emissiveIntensity),polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}));};
+        object.material=Array.isArray(object.material)?object.material.map(convert):convert(object.material);
+      });
+      if(disposed)return;
+      scene.add(neon.scene);lightsReady=true;host.dataset.loading='false';
+    },undefined,()=>{if(!disposed){lightsReady=true;host.dataset.loading='false';}});
   },undefined,()=>{if(!disposed){host.dataset.loading='false';callbacks.error('The store model could not load. Exit the store and try again.');}});
   const screenCanvas=document.createElement('canvas');screenCanvas.width=768;screenCanvas.height=256;const screenCtx=screenCanvas.getContext('2d')!;const screenTexture=own(new THREE.CanvasTexture(screenCanvas));screenTexture.colorSpace=THREE.SRGBColorSpace;
-  const screen=panel(screenTexture,0,1.95,-8.97,5.7,1.23);screen.userData.target={title:'Open full-screen visualizer',action:'visualizer'} satisfies StoreTarget;
+  const screen=panel(screenTexture,0,1.95,-8.945,5.7,1.23);screen.userData.target={title:'Open full-screen visualizer',action:'visualizer'} satisfies StoreTarget;
   // Every sleeve faces the entrance, with raised rows visible above those in front.
   const actionMeshes:THREE.Object3D[]=[screen];
   const textureLoader=new THREE.TextureLoader();let trackIndex=0;
@@ -135,8 +149,26 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
   document.addEventListener('pointerlockchange',pointerchange);document.addEventListener('pointerlockerror',pointererror);
   const resize=()=>{const w=Math.max(1,host.clientWidth),h=Math.max(1,host.clientHeight);renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();};const observer=new ResizeObserver(resize);observer.observe(host);resize();
   const forward=new THREE.Vector3(),right=new THREE.Vector3(),movement=new THREE.Vector3();
-  const drawScreen=(time:number)=>{screenCtx.fillStyle='#050814';screenCtx.fillRect(0,0,768,256);const {freq}=audioEngine.sample();const gradient=screenCtx.createLinearGradient(0,0,768,0);gradient.addColorStop(0,'#40dced');gradient.addColorStop(.5,'#d56cf4');gradient.addColorStop(1,'#f6a66b');screenCtx.strokeStyle=gradient;screenCtx.lineWidth=3;
-    for(let layer=0;layer<5;layer++){screenCtx.beginPath();for(let x=0;x<768;x+=5){const level=(freq[Math.floor(x/768*freq.length)]||0)/255;const y=150+layer*12-Math.sin(x*.014+time*.0004+layer*.3)*14-level*85; if(!x)screenCtx.moveTo(x,y);else screenCtx.lineTo(x,y);}screenCtx.stroke();}screenTexture.needsUpdate=true;};
+  const drawScreen=()=>{
+    screenCtx.fillStyle='#040711';screenCtx.fillRect(0,0,768,256);
+    const playing=!audioEngine.el.paused&&!audioEngine.el.ended;
+    const {freq,wave}=audioEngine.sample();
+    if(playing&&freq.length){
+      const gradient=screenCtx.createLinearGradient(0,20,0,235);gradient.addColorStop(0,'#f5a5e5');gradient.addColorStop(.45,'#a668f7');gradient.addColorStop(1,'#26d9ed');
+      screenCtx.fillStyle=gradient;
+      for(let i=0;i<64;i++){
+        const first=Math.floor(Math.pow(i/64,1.8)*freq.length*.8),end=Math.max(first+1,Math.floor(Math.pow((i+1)/64,1.8)*freq.length*.8));
+        let amplitude=0;for(let j=first;j<end;j++)amplitude=Math.max(amplitude,freq[j]||0);
+        const height=amplitude/255*190;screenCtx.fillRect(17+i*11.5,230-height,8,Math.max(2,height));
+      }
+      screenCtx.strokeStyle='#ddffff';screenCtx.lineWidth=1.5;screenCtx.beginPath();
+      for(let x=0;x<736;x+=3){const y=95+((wave[Math.floor(x/736*wave.length)]??128)-128)/128*65;if(x===0)screenCtx.moveTo(x+16,y);else screenCtx.lineTo(x+16,y);}screenCtx.stroke();
+    }else{
+      screenCtx.textAlign='center';screenCtx.fillStyle='#77deea';screenCtx.font='500 35px sans-serif';screenCtx.fillText('MUSIGEN • LIVE SOUND',384,118);
+      screenCtx.fillStyle='#a8a4bd';screenCtx.font='19px sans-serif';screenCtx.fillText('Pick a record. Find your frequency.',384,159);
+    }
+    screenTexture.needsUpdate=true;
+  };
   const animate=(time:number)=>{
     if(disposed)return;frame=requestAnimationFrame(animate);
     if(document.hidden){keys.clear();return;}
@@ -168,10 +200,11 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
     }
     host.dataset.vinylSpinning=String(deckState.spinning);host.dataset.vinylAngle=String(deckState.angle);
     host.dataset.recordState=phase;host.dataset.deckState=deckRequested?(deckState.settled?'playing-position':'loading-record'):'stowed';
-    if(time-lastScreen>100){drawScreen(time);lastScreen=time;}
+    if(lightsReady){lightsTime+=delta;const t=reducedMotion?1:THREE.MathUtils.smoothstep(lightsTime,.35,2.8);for(const mat of roomMaterials)mat.color.setScalar(.08+.92*t);host.dataset.lights=t===1?'on':'warming';}
+    if(time-lastScreen>1000/(quality==='low'?15:30)){drawScreen();lastScreen=time;}
     renderer.info.reset();renderStore(renderer,scene,camera);
     host.dataset.drawCalls=String(renderer.info.render.calls);host.dataset.triangles=String(renderer.info.render.triangles);
-  };drawScreen(0);frame=requestAnimationFrame(animate);
+  };drawScreen();frame=requestAnimationFrame(animate);
   return {capture,freeLook:()=>canvas.focus(),inspect,play,flip:()=>{rotation+=Math.PI;if(inspection){inspection.rotation.y=rotation;renderStore(renderer,scene,camera);}},home:()=>{deck.close();finishReturn();camera.position.set(0,1.65,6.5);yaw=0;pitch=-.12;},dispose:()=>{
     disposed=true;Object.assign(visit,{x:camera.position.x,z:camera.position.z,yaw,pitch});cancelAnimationFrame(frame);release();observer.disconnect();
     canvas.removeEventListener('contextmenu',contextmenu);canvas.removeEventListener('webglcontextlost',contextlost);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useStore } from '../../../store';
 import { usePreferences } from '../../../lib/preferences';
 import { api } from '../../../lib/api';
@@ -8,7 +8,7 @@ import { generationBlock, RECORDS_PER_ROOM } from './layout';
 import { createStoreScene, type StoreControls, type StoreTarget, type Visit } from './scene';
 import './store.css';
 
-function Room({tracks, label, quality, visit, onExit}: {tracks:Track[]; label:string; quality:'balanced'|'low'; visit:Visit; onExit:()=>void}) {
+function Room({tracks, label, quality, visit, onExit, exitRef}: {tracks:Track[]; label:string; quality:'balanced'|'low'; visit:Visit; onExit:()=>void; exitRef:RefObject<(()=>void)|null>}) {
   const host=useRef<HTMLDivElement>(null), controls=useRef<StoreControls|null>(null);
   const [target,setTarget]=useState<StoreTarget|null>(null), [inspection,setInspection]=useState<Track|null>(null), [captured,setCaptured]=useState(false), [error,setError]=useState(''), [freeLook,setFreeLook]=useState(false);
   useEffect(()=>{
@@ -19,13 +19,14 @@ function Room({tracks, label, quality, visit, onExit}: {tracks:Track[]; label:st
       play:(track)=>{setError('');void useStore.getState().playTrack(track).catch((e)=>setError(`Could not play: ${String(e)}`));},
       visualizer:()=>useStore.getState().setPlayerExpanded(true),
     }); } catch(e){setError(`The 3D store could not start: ${String(e)}. Use Compact or Full view on this device.`);}
-    return ()=>{controls.current?.dispose();controls.current=null;};
-  },[tracks,label,quality,visit]);
+    exitRef.current=()=>{if(controls.current)controls.current.exit(onExit);else onExit();};
+    return ()=>{exitRef.current=null;controls.current?.dispose();controls.current=null;};
+  },[tracks,label,quality,visit,onExit,exitRef]);
   return <div className="vinyl-room">
     <div ref={host} className="vinyl-canvas" />
     <div className="vinyl-room-top">
       <div><span className="vinyl-kicker">MUSIGEN RECORDS / EST. 1987</span><strong>{label}</strong></div>
-      <div className="vinyl-actions">{!captured && <button onClick={()=>controls.current?.capture()}>Enable mouse capture</button>}<button onClick={()=>controls.current?.home()}>Return to entrance</button><button onClick={onExit}>Exit store</button></div>
+      <div className="vinyl-actions">{!captured && <button onClick={()=>controls.current?.capture()}>Enable mouse capture</button>}<button onClick={()=>controls.current?.home()}>Return to entrance</button><button onClick={()=>exitRef.current?.()}>Exit store</button></div>
     </div>
     <div className={`vinyl-reticle ${(target && captured && !inspection)?'is-actionable':''}`} aria-hidden="true"><span /></div>
     {target && !inspection && <div className="vinyl-target" role="status"><strong>{target.title}</strong><span>{target.track?'Left click / F — inspect · Right click / Space — play':'Left click / F — open visualizer'}</span></div>}
@@ -39,6 +40,7 @@ function Room({tracks, label, quality, visit, onExit}: {tracks:Track[]; label:st
 export default function RecordStore() {
   const tracks=useStore(s=>s.tracks), playlists=useStore(s=>s.playlists), selected=useStore(s=>s.activePlaylist), liveJobs=useStore(s=>s.jobs), expanded=useStore(s=>s.playerExpanded);
   const update=usePreferences(s=>s.update);
+  const exitRef=useRef<(()=>void)|null>(null);
   const [entered,setEntered]=useState(false),[quality,setQuality]=useState<'balanced'|'low'>('balanced'),[page,setPage]=useState(0);
   const [snapshot,setSnapshot]=useState<{system:SystemStatus; jobs:Job[]; checked:number}|null>(null),[connectionError,setConnectionError]=useState('');
   const [visit]=useState<Visit>(()=>({x:0,z:6.5,yaw:0,pitch:-.12}));
@@ -60,9 +62,9 @@ export default function RecordStore() {
       <select aria-label="Store playlist" value={selected||''} onChange={e=>{useStore.getState().setActivePlaylist(e.target.value||null);setPage(0);}}><option value="">All Tracks</option>{playlists.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
       <label>Graphics <select aria-label="Store graphics quality" value={quality} onChange={e=>setQuality(e.target.value as 'balanced'|'low')}><option value="balanced">Balanced · 45 FPS</option><option value="low">Low · 30 FPS</option></select></label>
       {count>1&&<><button disabled={!safePage} onClick={()=>setPage(safePage-1)}>Previous crates</button><span>{safePage+1} / {count}</span><button disabled={safePage>=count-1} onClick={()=>setPage(safePage+1)}>Next crates</button></>}
-      <button onClick={exit}>Back to library</button>
+      <button onClick={()=>exitRef.current?exitRef.current():exit()}>Back to library</button>
     </div></div>
-    {entered&&!block&&!expanded ? <Room key={`${selected}:${safePage}:${quality}`} tracks={visible} label={label} quality={quality} visit={visit} onExit={exit} /> : <div className="vinyl-lobby">
+    {entered&&!block&&!expanded ? <Room key={`${selected}:${safePage}:${quality}`} tracks={visible} label={label} quality={quality} visit={visit} onExit={exit} exitRef={exitRef} /> : <div className="vinyl-lobby">
       <div className="vinyl-lobby-copy"><span className="vinyl-kicker">YOUR OWN AFTER-HOURS RECORD SHOP</span><h1>Find your<br/><em>frequency.</em></h1><p>Neon light. Walnut crates. Your collection, sleeve by sleeve.</p>
         {block?<div role="status" className="vinyl-notice"><strong>{entered?'The store is taking a break.':'The store will open when the GPU is free.'}</strong><p>{block}</p><p>3D graphics share the GPU with AI generation. The room stays unloaded to keep generation responsive. Music playback remains available.</p></div>:expanded?<p>Store rendering is paused while the full-screen visualizer is open.</p>:<><button className="vinyl-enter" onClick={()=>setEntered(true)}>Step inside the store</button><p className="vinyl-small">WASD + mouse · Shift captures/releases mouse<br/>Left click / F inspects · Right click / Space plays</p></>}
       </div><div className="vinyl-lobby-art" aria-hidden="true"><div className="vinyl-neon-sign">MUSIGEN</div><div className="vinyl-lobby-disc" /><span>33⅓ RPM / OPEN LATE</span></div>

@@ -9,7 +9,7 @@ import { signTexture, sleeveTexture, woodTexture } from './textures';
 
 export type Visit = { x: number; z: number; yaw: number; pitch: number };
 export type StoreTarget = { title: string; track?: Track; action?: 'visualizer' };
-export type StoreControls = { capture: () => void; freeLook: () => void; inspect: () => void; play: () => void; flip: () => void; home: () => void; dispose: () => void };
+export type StoreControls = { exit: (complete:()=>void) => void; capture: () => void; freeLook: () => void; inspect: () => void; play: () => void; flip: () => void; home: () => void; dispose: () => void };
 export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfName: string, visit: Visit, quality: 'balanced' | 'low', callbacks: {
   target: (target: StoreTarget | null) => void; inspection: (track: Track | null) => void; capture: (locked: boolean) => void;
   playing: (id: string) => boolean; play: (track: Track) => void; visualizer: () => void; error: (message: string) => void;
@@ -34,7 +34,7 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
   const keyLight=new THREE.DirectionalLight('#ffe3bf',2);keyLight.position.set(0,4,5);keyLight.layers.enable(FOREGROUND_LAYER);scene.add(keyLight);
   // The room is authored in Blender. Its lightmap preserves the lighting without runtime shadows.
   host.dataset.loading='true';
-  const roomMaterials=new Set<THREE.MeshBasicMaterial>();let lightsReady=false,lightsTime=0;
+  const roomMaterials=new Set<THREE.MeshBasicMaterial>();let lightsReady=false,lightsTime=0;let exitComplete:(()=>void)|null=null,exitTime=0,exitBrightness=1;
   const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   new GLTFLoader().load('/store/neon-boutique.glb',gltf=>{
     const assets=new Set<{dispose:()=>void}>();
@@ -98,13 +98,14 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
   const finishReturn=()=>{if(inspected)inspected.visible=true;if(inspection)camera.remove(inspection);inspection=null;inspected=null;phase='idle';deckRequested=false;callbacks.inspection(null);};
   const returnRecord=()=>{if(!inspection||phase==='returning')return;deck.close();deckRequested=false;phase='returning';transition=0;startPosition.copy(inspection.position);startQuaternion.copy(inspection.quaternion);};
   const inspect=()=>{
+    if(exitComplete)return;
     if(inspected){returnRecord();return;}
     const data=target?.userData.target as StoreTarget|undefined;if(!data)return;
     if(data.action==='visualizer'){release();callbacks.visualizer();return;}
     inspected=target as THREE.Mesh;inspection=inspected.clone();foreground(inspection);camera.add(inspection);sleeveHome();inspection.position.copy(homePosition);inspection.quaternion.copy(homeQuaternion);startPosition.copy(homePosition);startQuaternion.copy(homeQuaternion);inspection.scale.setScalar(1);rotation=0;phase='lifting';transition=0;inspected.visible=false;callbacks.inspection(data.track!);
   };
   const play=()=>{
-    if(phase==='returning')return;
+    if(exitComplete||phase==='returning')return;
     const data=(inspected||target)?.userData.target as StoreTarget|undefined;
     if(data?.track){
       if(!inspected)inspect();
@@ -121,6 +122,7 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
     target=next;const title=next?.uuid||'';if(title!==lastTarget){lastTarget=title;callbacks.target((next?.userData.target as StoreTarget)||null);}
   };
   const keydown=(e:KeyboardEvent)=>{
+    if(exitComplete)return;
     if(e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement)return;
     if(!locked && document.activeElement!==canvas)return;
     if(['KeyW','KeyA','KeyS','KeyD','KeyF','Space','ShiftLeft','ShiftRight','Escape'].includes(e.code))e.preventDefault();
@@ -132,6 +134,7 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
   };
   const keyup=(e:KeyboardEvent)=>keys.delete(e.code);
   const mousemove=(e:MouseEvent)=>{
+    if(exitComplete)return;
     if(locked){if(inspection){rotation+=e.movementX*.008;inspection.rotation.x=THREE.MathUtils.clamp(inspection.rotation.x+e.movementY*.005,-.7,.7);}else{yaw-=e.movementX*.0022;pitch=THREE.MathUtils.clamp(pitch-e.movementY*.0022,-1.2,1.2);}}
     else if(drag&&!inspection){yaw-=e.movementX*.0022;pitch=THREE.MathUtils.clamp(pitch-e.movementY*.0022,-1.2,1.2);dragDistance+=Math.abs(e.movementX)+Math.abs(e.movementY);}
     else if(drag&&inspection){rotation+=e.movementX*.008;inspection.rotation.x=THREE.MathUtils.clamp(inspection.rotation.x+e.movementY*.005,-.7,.7);dragDistance+=Math.abs(e.movementX)+Math.abs(e.movementY);}
@@ -200,12 +203,14 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
     }
     host.dataset.vinylSpinning=String(deckState.spinning);host.dataset.vinylAngle=String(deckState.angle);
     host.dataset.recordState=phase;host.dataset.deckState=deckRequested?(deckState.settled?'playing-position':'loading-record'):'stowed';
-    if(lightsReady){lightsTime+=delta;const t=reducedMotion?1:THREE.MathUtils.smoothstep(lightsTime,.35,2.8);for(const mat of roomMaterials)mat.color.setScalar(.08+.92*t);host.dataset.lights=t===1?'on':'warming';}
+    if(exitComplete){exitTime+=delta;const t=THREE.MathUtils.smoothstep(exitTime,0,1.4);for(const mat of roomMaterials)mat.color.setScalar(THREE.MathUtils.lerp(exitBrightness,.08,t));host.dataset.lights='dimming';}
+    else if(lightsReady){lightsTime+=delta;const t=reducedMotion?1:THREE.MathUtils.smoothstep(lightsTime,.35,2.8);for(const mat of roomMaterials)mat.color.setScalar(.08+.92*t);host.dataset.lights=t===1?'on':'warming';}
     if(time-lastScreen>1000/(quality==='low'?15:30)){drawScreen();lastScreen=time;}
     renderer.info.reset();renderStore(renderer,scene,camera);
+    if(exitComplete&&exitTime>=1.4){const complete=exitComplete;exitComplete=null;complete();return;}
     host.dataset.drawCalls=String(renderer.info.render.calls);host.dataset.triangles=String(renderer.info.render.triangles);
   };drawScreen();frame=requestAnimationFrame(animate);
-  return {capture,freeLook:()=>canvas.focus(),inspect,play,flip:()=>{rotation+=Math.PI;if(inspection){inspection.rotation.y=rotation;renderStore(renderer,scene,camera);}},home:()=>{deck.close();finishReturn();camera.position.set(0,1.65,6.5);yaw=0;pitch=-.12;},dispose:()=>{
+  return {exit:(complete)=>{if(exitComplete)return;if(reducedMotion||!lightsReady){complete();return;}release();keys.clear();drag=false;returnRecord();exitBrightness=roomMaterials.values().next().value?.color.r??1;exitTime=0;exitComplete=complete;},capture,freeLook:()=>canvas.focus(),inspect,play,flip:()=>{rotation+=Math.PI;if(inspection){inspection.rotation.y=rotation;renderStore(renderer,scene,camera);}},home:()=>{deck.close();finishReturn();camera.position.set(0,1.65,6.5);yaw=0;pitch=-.12;},dispose:()=>{
     disposed=true;Object.assign(visit,{x:camera.position.x,z:camera.position.z,yaw,pitch});cancelAnimationFrame(frame);release();observer.disconnect();
     canvas.removeEventListener('contextmenu',contextmenu);canvas.removeEventListener('webglcontextlost',contextlost);
     window.removeEventListener('keydown',keydown);window.removeEventListener('keyup',keyup);window.removeEventListener('mousemove',mousemove);window.removeEventListener('mousedown',mousedown);window.removeEventListener('mouseup',mouseup);window.removeEventListener('blur',blur);

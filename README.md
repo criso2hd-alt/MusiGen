@@ -39,7 +39,7 @@ The store opens while heavy AI work is idle and releases its graphics resources 
 | :---: | :---: |
 | ![Rotatable record sleeve](docs/screenshots/store-inspection.png) | ![Animated turntable with live wall visualizer](docs/screenshots/store-turntable.png) |
 
-These are actual app screenshots at **2560 × 1440**; click an image to view it at full resolution. The source on `main` includes v0.0.2; check the [release tag](../../releases) before downloading a packaged build.
+These are actual app screenshots at **2560 × 1440**; click an image to view it at full resolution. Download the portable **[v0.0.2 build](https://github.com/criso2hd-alt/MusiGen/releases/tag/v0.0.2)** to try these features.
 
 ## ✨ Highlights
 

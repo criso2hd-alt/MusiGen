@@ -20,6 +20,27 @@ Generate complete songs — music *and* lyrics — on your own GPU, with a Napst
 
 ---
 
+## New in v0.0.2
+
+**Step inside your music collection.** The Neon Boutique is a first-person, 1980s-inspired record shop built into MusiGen. Walk between walnut crates, pick up an album, inspect its artwork, and play it on an animated turntable—all without leaving the app.
+
+![The Neon Boutique record store](docs/screenshots/store-overview.png)
+
+- **An interactive vinyl shop:** WASD navigation, Shift mouse capture, rotating sleeves, a sliding turntable, spinning records and a moving tonearm. Neon stays lit as the room lights brighten on entry and dim on exit. The back-wall screen responds to your music.
+- **Bring your own melody:** import audio or MIDI, record a hum with your microphone, or capture a connected MIDI keyboard with audible monitoring. Optional media tools can be installed or repaired from Setup. Reference arrangements guide generation; they do not guarantee an exact cover or final duration.
+- **A more useful Mixer:** searchable ingredients, adjustable text size, customizable pills, Pair suggestions and Shake up. Reference controls sit above Generate, with a collapsible queue beneath it and a permanent system-resource strip at the top.
+- **Better song recipes:** saved seeds and generation settings, automatic titles when left blank, recipe restoration and remixing. Lyrics can be written for the selected duration, with warnings when they may not fit.
+- **Library and playback improvements:** compact and expanded cards, song details, clearer playlist controls, and playback that stays within the selected playlist.
+- **Clearer visualizers and lyrics:** an explicit full-screen button, remembered/pinned presets, auto-cycle off by default, lyric appearance controls and optional word-timing synchronization. Recognized timing may need correction; unsynchronized scrolling is approximate.
+
+The store opens while heavy AI work is idle and releases its graphics resources when generation needs the GPU. Choose Balanced or Low graphics in the store. See [store controls and asset details](docs/STORE_3D.md).
+
+| Inspect the sleeve | Play the vinyl |
+| :---: | :---: |
+| ![Rotatable record sleeve](docs/screenshots/store-inspection.png) | ![Animated turntable with live wall visualizer](docs/screenshots/store-turntable.png) |
+
+These are actual app screenshots at **2560 × 1440**; click an image to view it at full resolution. The source on `main` includes v0.0.2; check the [release tag](../../releases) before downloading a packaged build.
+
 ## ✨ Highlights
 
 - 🎵 **Real music generation** — powered by **[YuE2](https://github.com/multimodal-art-projection/YuE)** (3B), running **standalone** (no ComfyUI), 48 kHz stereo, style + lyrics aware.
@@ -93,15 +114,7 @@ cd frontend && npm run build          # build the SPA first
 cd ../installer && pyinstaller --noconfirm MusiGen.spec
 ```
 
-The preview can be built separately without replacing an existing portable app:
-
-```powershell
-.venv/Scripts/python -m PyInstaller --noconfirm --distpath installer/dist/test-build --workpath installer/build/test-build installer/MusiGen.spec
-```
-
-Build the frontend first. Tested runtime versions are pinned in
-`installer/runtime_config.py`. See [local preview testing](docs/LOCAL_TEST_BUILD.md)
-for the prepared test folder and acceptance checklist.
+The working portable build is `installer/dist/MusiGen.exe`. Close it before rebuilding; preserve its `models`, `runtime`, `data` and `music` folders. See [local testing notes](docs/LOCAL_TEST_BUILD.md).
 
 ## 🧱 How it works
 

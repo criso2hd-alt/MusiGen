@@ -39,5 +39,6 @@ No additional GPU generation was needed for this UI/setup change.
 The same v0.0.2 executable now includes the embedded Blender-authored Neon Boutique,
 animated sleeve inspection, sliding turntable, vinyl extraction and playback-synced
 spinning/tonearm movement. It also includes the playlist playback scope correction.
-See STORE_3D.md for controls, the asset pipeline and validation limits. No push or
-release has been made. Native mouse capture still needs acceptance testing.
+See STORE_3D.md for controls, the asset pipeline and validation limits. The store and studio improvements are included in the v0.0.2 source update.
+Native mouse capture still needs acceptance testing; packaged releases are listed
+on GitHub separately.

@@ -13,7 +13,7 @@ Branch: `codex/vinyl-store-3d`. Library > Record store opens an embedded WebGL r
 
 ## Asset pipeline
 
-`assets/store/neon-boutique.blend` is the editable Blender source. `assets/store/build_store.py` regenerates its modeled furniture, lighting, headphones, posters, counter, speakers and listening stations. Run with Blender 5.2 in background and `-- --bake` to generate the preview, 4096-pixel lighting atlas and `frontend/public/store/neon-boutique.glb`. The GLB is bundled by Vite and the regular installer spec. Blender is an authoring dependency only, not required on users' computers.
+`assets/store/neon-boutique.blend` is the editable, user-optimized Blender source. Use `assets/store/bake_edited.py` to bake/export that file without overwriting it. **Do not run `build_store.py` on the edited source**: it is the original scene generator and would replace the user's changes. The GLB is bundled by Vite and the regular installer spec. Blender is an authoring dependency only, not required on users' computers.
 
 The room uses baked illumination and a single static mesh plus emissive fixtures. Album art, sleeves, the animated inspection deck and the music-responsive counter display remain interactive Three.js objects. Artwork and music stay local. Original concept images are under `docs/store-concepts`.
 
@@ -23,7 +23,7 @@ The room is lazy-loaded, capped at 45 FPS (Balanced) or 30 FPS (Low), and stops 
 
 ## Validation and limits
 
-TypeScript/Vite build and the 17 frontend tests pass, including collision bounds, generation guards and playlist scope. Browser checks exercised real local cover/audio loading, sleeve selection, playback progress, turntable presentation, spin-on/play and stop-on/pause state, sleeve return, and simulated busy-state unloading. Pointer capture is denied by the Codex browser; native WebView2 capture still needs user acceptance testing in the EXE. This is an experimental first art pass, not a final visual-quality sign-off.
+TypeScript/Vite build and the 22 frontend tests pass, including collision bounds, generation guards and playlist scope. Browser checks exercised real local cover/audio loading, sleeve selection, playback progress, turntable presentation, spin-on/play and stop-on/pause state, sleeve return, and simulated busy-state unloading. Pointer capture is denied by the Codex browser; native WebView2 capture still needs user acceptance testing in the EXE. This is an experimental first art pass, not a final visual-quality sign-off.
 
 Three.js and its GLTFLoader use the MIT license; see `frontend/public/store/THREE-LICENSE.txt`. Blender scene geometry/materials are generated locally by the included script.
 
@@ -53,3 +53,5 @@ brightness ramps up without adding real-time shadows. Reduced-motion preferences
 skip the fade. This adds a few neon-only draw calls to the one-material room.
 The back-wall canvas sits in front of the recessed panel and displays live audio
 frequency bars plus a waveform, with an idle message when playback is paused.
+
+The material fade supports both unlit and emissive PBR Blender exports. Exit reverses the brightness transition before returning to the library. Empty-bin signs have undistorted artwork and solid blank backs; repeated cabinet-front collection plaques have been removed.

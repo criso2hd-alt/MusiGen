@@ -15,14 +15,14 @@ export function words(ctx: CanvasRenderingContext2D, text: string, x: number, y:
   }
   ctx.fillText(row,x,y);
 }
-export function signTexture(title: string, subtitle = '', color='#6feaff', neon=false) {
-  return canvasTexture(1024,256,(c)=>{
-    c.fillStyle='#10121b'; c.fillRect(0,0,1024,256);
-    c.strokeStyle='#3b414d'; c.lineWidth=2; c.strokeRect(8,8,1008,240);
+export function signTexture(title: string, subtitle = '', color='#6feaff', neon=false, height=256) {
+  return canvasTexture(1024,height,(c)=>{
+    c.fillStyle='#10121b'; c.fillRect(0,0,1024,height);
+    c.strokeStyle='#3b414d'; c.lineWidth=2; c.strokeRect(8,8,1008,height-16);
     c.textAlign='center'; c.font='500 76px sans-serif'; c.fillStyle=color;
     if(neon){c.shadowColor=color;c.shadowBlur=22;}
-    c.fillText(title,512,132,950); c.shadowBlur=0;
-    c.font='22px sans-serif'; c.fillStyle='#e0d3c4'; c.fillText(subtitle,512,203,950);
+    c.fillText(title,512,height*.52,950); c.shadowBlur=0;
+    c.font='22px sans-serif'; c.fillStyle='#e0d3c4'; c.fillText(subtitle,512,height*.79,950);
   });
 }
 export function woodTexture() {

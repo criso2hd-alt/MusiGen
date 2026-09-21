@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { foreground, FOREGROUND_LAYER, renderStore } from './foreground';
+import { roomLightFader } from './lighting';
 import { createListeningDeck } from './turntable';
 import type { Track } from '../../../lib/types';
 import { audioEngine } from '../../../lib/audio';
@@ -34,7 +35,7 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
   const keyLight=new THREE.DirectionalLight('#ffe3bf',2);keyLight.position.set(0,4,5);keyLight.layers.enable(FOREGROUND_LAYER);scene.add(keyLight);
   // The room is authored in Blender. Its lightmap preserves the lighting without runtime shadows.
   host.dataset.loading='true';
-  const roomMaterials=new Set<THREE.MeshBasicMaterial>();let lightsReady=false,lightsTime=0;let exitComplete:(()=>void)|null=null,exitTime=0,exitBrightness=1;
+  const roomLights=roomLightFader();let lightsReady=false,lightsTime=0;let exitComplete:(()=>void)|null=null,exitTime=0,exitBrightness=1;
   const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   new GLTFLoader().load('/store/neon-boutique.glb',gltf=>{
     const assets=new Set<{dispose:()=>void}>();
@@ -43,12 +44,12 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
       assets.add(object.geometry);
       for(const mat of Array.isArray(object.material)?object.material:[object.material]){
         assets.add(mat);
-        if(mat instanceof THREE.MeshBasicMaterial){roomMaterials.add(mat);mat.color.setScalar(reducedMotion?1:.08);}
+        roomLights.add(mat);
         for(const value of Object.values(mat))if(value instanceof THREE.Texture){assets.add(value);value.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());}
       }
     });
     if(disposed){assets.forEach(asset=>asset.dispose());return;}
-    assets.forEach(asset=>resources.add(asset));scene.add(gltf.scene);
+    assets.forEach(asset=>resources.add(asset));roomLights.set(reducedMotion?1:.08);scene.add(gltf.scene);
     new GLTFLoader().load('/store/neon-fixtures.glb',neon=>{
       neon.scene.traverse(object=>{
         if(!(object instanceof THREE.Mesh))return;
@@ -73,7 +74,12 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
       const x=bin.x+(col-1)*1.05,z=bin.z+.25-row*.62,y=1.13+row*.28;
       const track=tracks[trackIndex++];
       for(let layer=0;layer<(track?5:0);layer++){const jacket=box(x,y-.06+layer*.012,z-.04-layer*.045,.79,.73,.025,layer%2?dark:walnut);jacket.rotation.x=-.13;}
-      if(!track){panel(signTexture((binIndex+col)%2?'COMING SOON':'SOLD OUT','YOUR NEXT DISCOVERY','#d5bf98'),x,y,z+.015,.82,.38);continue;}
+      if(!track){
+        // 2:1 art on a 2:1 placard, with an opaque blank reverse instead of floating text.
+        box(x,y,z+.015,.82,.41,.018,dark);
+        panel(signTexture((binIndex+col)%2?'COMING SOON':'SOLD OUT','YOUR NEXT DISCOVERY','#d5bf98',false,512),x,y,z+.0245,.82,.41);
+        continue;
+      }
       const front=own(sleeveTexture(track)),back=own(sleeveTexture(track,true));
       const frontMat=own(new THREE.MeshBasicMaterial({map:front,toneMapped:false}));const backMat=own(new THREE.MeshBasicMaterial({map:back,toneMapped:false}));
       const record=new THREE.Mesh(sleeveGeometry,[cream,cream,cream,cream,frontMat,backMat]);record.position.set(x,y,z+.015);record.rotation.x=-.13;record.userData.target={title:track.title,track} satisfies StoreTarget;
@@ -203,14 +209,14 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], shelfNam
     }
     host.dataset.vinylSpinning=String(deckState.spinning);host.dataset.vinylAngle=String(deckState.angle);
     host.dataset.recordState=phase;host.dataset.deckState=deckRequested?(deckState.settled?'playing-position':'loading-record'):'stowed';
-    if(exitComplete){exitTime+=delta;const t=THREE.MathUtils.smoothstep(exitTime,0,1.4);for(const mat of roomMaterials)mat.color.setScalar(THREE.MathUtils.lerp(exitBrightness,.08,t));host.dataset.lights='dimming';}
-    else if(lightsReady){lightsTime+=delta;const t=reducedMotion?1:THREE.MathUtils.smoothstep(lightsTime,.35,2.8);for(const mat of roomMaterials)mat.color.setScalar(.08+.92*t);host.dataset.lights=t===1?'on':'warming';}
+    if(exitComplete){exitTime+=delta;const t=THREE.MathUtils.smoothstep(exitTime,0,1.4);roomLights.set(THREE.MathUtils.lerp(exitBrightness,.08,t));host.dataset.lights='dimming';}
+    else if(lightsReady){lightsTime+=delta;const t=reducedMotion?1:THREE.MathUtils.smoothstep(lightsTime,.35,2.8);roomLights.set(.08+.92*t);host.dataset.lights=t===1?'on':'warming';}
     if(time-lastScreen>1000/(quality==='low'?15:30)){drawScreen();lastScreen=time;}
     renderer.info.reset();renderStore(renderer,scene,camera);
     if(exitComplete&&exitTime>=1.4){const complete=exitComplete;exitComplete=null;complete();return;}
     host.dataset.drawCalls=String(renderer.info.render.calls);host.dataset.triangles=String(renderer.info.render.triangles);
   };drawScreen();frame=requestAnimationFrame(animate);
-  return {exit:(complete)=>{if(exitComplete)return;if(reducedMotion||!lightsReady){complete();return;}release();keys.clear();drag=false;returnRecord();exitBrightness=roomMaterials.values().next().value?.color.r??1;exitTime=0;exitComplete=complete;},capture,freeLook:()=>canvas.focus(),inspect,play,flip:()=>{rotation+=Math.PI;if(inspection){inspection.rotation.y=rotation;renderStore(renderer,scene,camera);}},home:()=>{deck.close();finishReturn();camera.position.set(0,1.65,6.5);yaw=0;pitch=-.12;},dispose:()=>{
+  return {exit:(complete)=>{if(exitComplete)return;if(reducedMotion||!lightsReady){complete();return;}release();keys.clear();drag=false;returnRecord();exitBrightness=roomLights.brightness;exitTime=0;exitComplete=complete;},capture,freeLook:()=>canvas.focus(),inspect,play,flip:()=>{rotation+=Math.PI;if(inspection){inspection.rotation.y=rotation;renderStore(renderer,scene,camera);}},home:()=>{deck.close();finishReturn();camera.position.set(0,1.65,6.5);yaw=0;pitch=-.12;},dispose:()=>{
     disposed=true;Object.assign(visit,{x:camera.position.x,z:camera.position.z,yaw,pitch});cancelAnimationFrame(frame);release();observer.disconnect();
     canvas.removeEventListener('contextmenu',contextmenu);canvas.removeEventListener('webglcontextlost',contextlost);
     window.removeEventListener('keydown',keydown);window.removeEventListener('keyup',keyup);window.removeEventListener('mousemove',mousemove);window.removeEventListener('mousedown',mousedown);window.removeEventListener('mouseup',mouseup);window.removeEventListener('blur',blur);

@@ -8,6 +8,7 @@
 
 Generate complete songs — music *and* lyrics — on your own GPU, with a Napster/Winamp‑era player, striking Milkdrop visualizers, AI cover art, and a drag‑and‑drop "mixer". No cloud. No accounts. No telemetry. Everything lives in one portable folder.
 
+[![Discord](https://img.shields.io/badge/Discord-join%20the%20community-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/mEfSW3XfNn)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22d3ee.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Windows-11-a855f7.svg)](#-getting-started-portable-app)
 [![Runs local](https://img.shields.io/badge/AI-100%25%20local-f43f5e.svg)](#-how-it-works)

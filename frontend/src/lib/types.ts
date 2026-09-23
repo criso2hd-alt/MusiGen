@@ -103,6 +103,7 @@ export interface MediaTask { id: string; kind: "reference" | "alignment"; status
 export interface MediaCapabilities { reference_missing: string[]; alignment_missing: string[]; midi_missing: string[]; extensions: string[] }
 
 export interface Track {
+  rating?: number;
   id: string;
   title: string;
   style: string;

@@ -1,10 +1,14 @@
 {
-  "source_sha256": "690b000d48b90b3b39fbdcede09a12293ad75235612b5b8fdbaeace24e326d7c",
-  "source_triangles": 41600,
-  "objects": 21,
+  "source_sha256": "224f3d29eea40af8e662ce048942a1d54680f7e79dd9a2943a2909ba32989950",
+  "source_triangles": 41788,
+  "objects": 24,
   "missing_images": [],
-  "export_triangles": 41600,
+  "export_triangles": 41788,
   "uv_out_of_bounds": 0,
   "uv_degenerate_triangles": 0,
-  "zero_area_geometry": 0
+  "zero_area_geometry": 0,
+  "animated_meshes": [
+    "LR_Big_Speakers",
+    "LR_Small_Speakers"
+  ]
 }

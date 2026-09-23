@@ -14,3 +14,7 @@
 @media(max-width:850px){.vinyl-lobby-art{display:none}.vinyl-toolbar{padding:10px}.vinyl-room-top{padding:12px}.vinyl-room-top>div:first-child{display:none}.vinyl-inspect-info{max-width:240px;font-size:11px}}
 
 .vinyl-canvas[data-loading="true"]::after{content:"Opening the store...";position:absolute;inset:0;display:grid;place-items:center;background:#11121be8;color:#a7e4ed;font-size:16px;pointer-events:none}
+
+.vinyl-entry-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:12px}
+.vinyl-entry-actions button{flex:1 1 190px}
+.vinyl-store .vinyl-entry button:hover,.vinyl-store .vinyl-enter:hover{background:#a4f3f7;color:#10202a}

@@ -113,6 +113,7 @@ export const api = {
   tracks: () => fetch("/api/tracks").then((r) => j<Track[]>(r)),
   deleteTrack: (id: string) =>
     fetch(`/api/tracks/${id}`, { method: "DELETE" }).then((r) => j(r)),
+  rateTrack: (id: string, rating: number) => fetch(`/api/tracks/${id}`, {method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({rating})}).then(r=>j<Track>(r)),
   renameTrack: (id: string, title: string) =>
     fetch(`/api/tracks/${id}`, {
       method: "PATCH",

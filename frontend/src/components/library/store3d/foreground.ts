@@ -7,7 +7,7 @@ export function foreground(object: Object3D) {
 }
 
 /** Draw held objects with their own shared depth buffer, above the shop. */
-export function renderStore(renderer: WebGLRenderer, scene: Scene, camera: Camera) {
+export function renderStore(renderer: WebGLRenderer, scene: Scene, camera: Camera, renderWorld?: () => void) {
   const mask = camera.layers.mask;
   const background = scene.background;
   const fog = scene.fog;
@@ -16,7 +16,7 @@ export function renderStore(renderer: WebGLRenderer, scene: Scene, camera: Camer
     renderer.autoClear = false;
     renderer.clear();
     camera.layers.set(0);
-    renderer.render(scene, camera);
+    if (renderWorld) renderWorld(); else renderer.render(scene, camera);
     renderer.clearDepth();
     scene.background = null;
     scene.fog = null;

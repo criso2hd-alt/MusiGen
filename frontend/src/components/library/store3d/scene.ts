@@ -1,7 +1,13 @@
 import * as THREE from 'three';
+import {createPlaybackGate} from './playbackGate';
+import {createMusicLighting} from './musicLighting';
+import {usePreferences} from '../../../lib/preferences';
+import {useStore} from '../../../store';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { foreground, FOREGROUND_LAYER, renderStore } from './foreground';
 import { roomLightFader } from './lighting';
+import { createStoreReflections } from './reflections';
+import { createSpeakerMotion, speakerEnergy, type SpeakerBand } from './speakers';
 import { createListeningDeck } from './turntable';
 import type { Track } from '../../../lib/types';
 import { audioEngine } from '../../../lib/audio';
@@ -13,7 +19,7 @@ export type StoreTarget = { title: string; track?: Track; action?: 'visualizer' 
 export type StoreControls = { exit: (complete:()=>void) => void; capture: () => void; freeLook: () => void; inspect: () => void; play: () => void; flip: () => void; home: () => void; dispose: () => void };
 export function createStoreScene(host: HTMLDivElement, tracks: Track[], visit: Visit, quality: 'balanced' | 'low', callbacks: {
   target: (target: StoreTarget | null) => void; inspection: (track: Track | null) => void; capture: (locked: boolean) => void;
-  playing: (id: string) => boolean; play: (track: Track) => void; visualizer: () => void; error: (message: string) => void;
+  playing: (id: string) => boolean; play: (track: Track) => void; toggle: (track:Track) => void; visualizer: () => void; error: (message: string) => void; ready: (ready:boolean) => void;
 }): StoreControls {
   const renderer=new THREE.WebGLRenderer({antialias:quality==='balanced',powerPreference:'low-power'});
   renderer.info.autoReset=false;
@@ -35,20 +41,24 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], visit: V
   const keyLight=new THREE.DirectionalLight('#ffe3bf',2);keyLight.position.set(0,4,5);keyLight.layers.enable(FOREGROUND_LAYER);scene.add(keyLight);
   // The room is authored in Blender. Its lightmap preserves the lighting without runtime shadows.
   host.dataset.loading='true';
-  const roomLights=roomLightFader();let lightsReady=false,lightsTime=0;let exitComplete:(()=>void)|null=null,exitTime=0,exitBrightness=1;
+  const musicLighting=createMusicLighting();
+  const speakers:{band:SpeakerBand;motion:ReturnType<typeof createSpeakerMotion>}[]=[];
+  const roomLights=roomLightFader();let lightsReady=false,lightsTime=0,entranceComplete=false;let exitComplete:(()=>void)|null=null,exitTime=0,exitBrightness=1;
   const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  new GLTFLoader().load('/store/neon-boutique.glb',gltf=>{
+  new GLTFLoader().load('/store/neon-boutique.glb?v=moody-light-speakers-3',gltf=>{
     const assets=new Set<{dispose:()=>void}>();
     gltf.scene.traverse(object=>{
       if(!(object instanceof THREE.Mesh))return;
       assets.add(object.geometry);
       for(const mat of Array.isArray(object.material)?object.material:[object.material]){
         assets.add(mat);
-        roomLights.add(mat);
+        roomLights.add(mat);musicLighting.add(mat);
         for(const value of Object.values(mat))if(value instanceof THREE.Texture){assets.add(value);value.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());}
       }
     });
     if(disposed){assets.forEach(asset=>asset.dispose());return;}
+    gltf.scene.updateMatrixWorld(true);
+    gltf.scene.traverse(object=>{if(object instanceof THREE.Mesh && /^LR_(Big|Small)_Speakers/.test(object.name)){const band=object.name.startsWith('LR_Big')?'big':'small';speakers.push({band,motion:createSpeakerMotion(object,band)});}});
     assets.forEach(asset=>resources.add(asset));roomLights.set(reducedMotion?1:.08);scene.add(gltf.scene);
     new GLTFLoader().load('/store/neon-fixtures.glb',neon=>{
       neon.scene.traverse(object=>{
@@ -59,6 +69,7 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], visit: V
         object.material=Array.isArray(object.material)?object.material.map(convert):convert(object.material);
       });
       if(disposed)return;
+      neon.scene.traverse(o=>{if(o instanceof THREE.Mesh)for(const m of Array.isArray(o.material)?o.material:[o.material])musicLighting.add(m,true);});
       scene.add(neon.scene);lightsReady=true;host.dataset.loading='false';
     },undefined,()=>{if(!disposed){lightsReady=true;host.dataset.loading='false';}});
   },undefined,()=>{if(!disposed){host.dataset.loading='false';callbacks.error('The store model could not load. Exit the store and try again.');}});
@@ -67,12 +78,12 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], visit: V
   // Every sleeve faces the entrance, with raised rows visible above those in front.
   const actionMeshes:THREE.Object3D[]=[screen];
   const textureLoader=new THREE.TextureLoader();let trackIndex=0;
-  const sleeveGeometry=own(new THREE.BoxGeometry(.82,.82,.045));
+  const sleeveGeometry=own(new THREE.BoxGeometry(.82,.82,.006));
   for(const [binIndex,bin] of BINS.entries()){
     for(let row=0;row<2;row++)for(let col=0;col<3;col++){
       const x=bin.x+(col-1)*1.05,z=bin.z+.25-row*.62,y=1.13+row*.28;
       const track=tracks[trackIndex++];
-      for(let layer=0;layer<(track?5:0);layer++){const jacket=box(x,y-.06+layer*.012,z-.04-layer*.045,.79,.73,.025,layer%2?dark:walnut);jacket.rotation.x=-.13;}
+      for(let layer=0;layer<(track?5:0);layer++){const jacket=box(x,y-.06+layer*.012,z-.04-layer*.045,.79,.73,.006,layer%2?dark:walnut);jacket.rotation.x=-.13;}
       if(!track){
         // 2:1 art on a 2:1 placard, with an opaque blank reverse instead of floating text.
         box(x,y,z+.015,.82,.41,.018,dark);
@@ -90,7 +101,7 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], visit: V
   let target:THREE.Object3D|null=null,inspected:THREE.Mesh|null=null,inspection:THREE.Mesh|null=null,locked=false,drag=false,dragDistance=0;
   let yaw=camera.rotation.y,pitch=camera.rotation.x,rotation=0,frame=0,lastTime=0,lastScreen=0,lastTarget='';
   const release=()=>{if(document.pointerLockElement===canvas)document.exitPointerLock();};
-  const capture=()=>{canvas.focus();if(document.pointerLockElement===canvas){release();return;}try{const request=canvas.requestPointerLock();request?.catch(()=>callbacks.error('Mouse capture was blocked. Click Enter / capture mouse and try again.'));}catch{callbacks.error('Mouse capture is unavailable. You can still point at records and click to inspect.');}};
+  const capture=()=>{if(!entranceComplete||exitComplete)return;canvas.focus();if(document.pointerLockElement===canvas){release();return;}try{const request=canvas.requestPointerLock();request?.catch(()=>callbacks.error('Mouse capture was blocked. Click Enter / capture mouse and try again.'));}catch{callbacks.error('Mouse capture is unavailable. You can still point at records and click to inspect.');}};
   const deck=createListeningDeck(camera);
   let phase:'idle'|'lifting'|'held'|'returning'='idle',transition=0,deckRequested=false;
   const startPosition=new THREE.Vector3(),startQuaternion=new THREE.Quaternion();
@@ -100,8 +111,9 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], visit: V
     camera.updateMatrixWorld();inspected.getWorldPosition(homePosition);camera.worldToLocal(homePosition);
     camera.getWorldQuaternion(inverseCamera).invert();inspected.getWorldQuaternion(homeQuaternion);homeQuaternion.premultiply(inverseCamera);
   };
-  const finishReturn=()=>{if(inspected)inspected.visible=true;if(inspection)camera.remove(inspection);inspection=null;inspected=null;phase='idle';deckRequested=false;callbacks.inspection(null);};
-  const returnRecord=()=>{if(!inspection||phase==='returning')return;deck.close();deckRequested=false;phase='returning';transition=0;startPosition.copy(inspection.position);startQuaternion.copy(inspection.quaternion);};
+  const playbackGate=createPlaybackGate<Track>(callbacks.play);
+  const finishReturn=()=>{playbackGate.cancel();if(inspected)inspected.visible=true;if(inspection)camera.remove(inspection);inspection=null;inspected=null;phase='idle';deckRequested=false;callbacks.inspection(null);};
+  const returnRecord=()=>{playbackGate.cancel();if(!inspection||phase==='returning')return;deck.close();deckRequested=false;phase='returning';transition=0;startPosition.copy(inspection.position);startQuaternion.copy(inspection.quaternion);};
   const inspect=()=>{
     if(exitComplete)return;
     if(inspected){returnRecord();return;}
@@ -113,10 +125,12 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], visit: V
     if(exitComplete||phase==='returning')return;
     const data=(inspected||target)?.userData.target as StoreTarget|undefined;
     if(data?.track){
+      if(playbackGate.waiting){playbackGate.cancel();deckRequested=false;deck.close();return;}
+      if(deckRequested){callbacks.toggle(data.track);return;}
       if(!inspected)inspect();
       const mats=inspection?.material;
       deck.start(Array.isArray(mats)?(mats[4] as THREE.MeshBasicMaterial).map:null);deckRequested=true;rotation=0;
-      callbacks.play(data.track);
+      playbackGate.request(data.track);
     }else if(data?.action==='visualizer'){release();callbacks.visualizer();}
   };
   const updateTarget=()=>{
@@ -127,7 +141,7 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], visit: V
     target=next;const title=next?.uuid||'';if(title!==lastTarget){lastTarget=title;callbacks.target((next?.userData.target as StoreTarget)||null);}
   };
   const keydown=(e:KeyboardEvent)=>{
-    if(exitComplete)return;
+    if(exitComplete||!entranceComplete)return;
     if(e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement)return;
     if(!locked && document.activeElement!==canvas)return;
     if(['KeyW','KeyA','KeyS','KeyD','KeyF','Space','ShiftLeft','ShiftRight','Escape'].includes(e.code))e.preventDefault();
@@ -139,13 +153,13 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], visit: V
   };
   const keyup=(e:KeyboardEvent)=>keys.delete(e.code);
   const mousemove=(e:MouseEvent)=>{
-    if(exitComplete)return;
+    if(exitComplete||!entranceComplete)return;
     if(locked){if(inspection){rotation+=e.movementX*.008;inspection.rotation.x=THREE.MathUtils.clamp(inspection.rotation.x+e.movementY*.005,-.7,.7);}else{yaw-=e.movementX*.0022;pitch=THREE.MathUtils.clamp(pitch-e.movementY*.0022,-1.2,1.2);}}
     else if(drag&&!inspection){yaw-=e.movementX*.0022;pitch=THREE.MathUtils.clamp(pitch-e.movementY*.0022,-1.2,1.2);dragDistance+=Math.abs(e.movementX)+Math.abs(e.movementY);}
     else if(drag&&inspection){rotation+=e.movementX*.008;inspection.rotation.x=THREE.MathUtils.clamp(inspection.rotation.x+e.movementY*.005,-.7,.7);dragDistance+=Math.abs(e.movementX)+Math.abs(e.movementY);}
     else if(e.target===canvas){const bounds=canvas.getBoundingClientRect();raycaster.setFromCamera(new THREE.Vector2((e.clientX-bounds.left)/bounds.width*2-1,-(e.clientY-bounds.top)/bounds.height*2+1),camera);updateTarget();}
   };
-  const mousedown=(e:MouseEvent)=>{if(e.target!==canvas)return;canvas.focus();if(e.button===2){e.preventDefault();if(!locked&&!inspected){const b=canvas.getBoundingClientRect();raycaster.setFromCamera(new THREE.Vector2((e.clientX-b.left)/b.width*2-1,-(e.clientY-b.top)/b.height*2+1),camera);updateTarget();}play();return;}if(e.button===0){drag=true;dragDistance=0;}};
+  const mousedown=(e:MouseEvent)=>{if(e.target!==canvas||!entranceComplete||exitComplete)return;canvas.focus();if(e.button===2){e.preventDefault();if(!locked&&!inspected){const b=canvas.getBoundingClientRect();raycaster.setFromCamera(new THREE.Vector2((e.clientX-b.left)/b.width*2-1,-(e.clientY-b.top)/b.height*2+1),camera);updateTarget();}play();return;}if(e.button===0){drag=true;dragDistance=0;}};
   const mouseup=(e:MouseEvent)=>{if(e.button!==0)return;if(drag&&dragDistance<6&&(e.target===canvas||locked)){if(!locked&&!inspected){const bounds=canvas.getBoundingClientRect();raycaster.setFromCamera(new THREE.Vector2((e.clientX-bounds.left)/bounds.width*2-1,-(e.clientY-bounds.top)/bounds.height*2+1),camera);updateTarget();}inspect();}drag=false;};
   const pointerchange=()=>{locked=document.pointerLockElement===canvas;keys.clear();drag=false;callbacks.capture(locked);};
   const pointererror=()=>callbacks.error('Mouse capture was not allowed. Try Enable mouse capture again, or use Browse without capture: drag to look, WASD to walk.');
@@ -155,7 +169,8 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], visit: V
   canvas.addEventListener('contextmenu',contextmenu);canvas.addEventListener('webglcontextlost',contextlost);
   window.addEventListener('keydown',keydown);window.addEventListener('keyup',keyup);window.addEventListener('mousemove',mousemove);window.addEventListener('mousedown',mousedown);window.addEventListener('mouseup',mouseup);window.addEventListener('blur',blur);
   document.addEventListener('pointerlockchange',pointerchange);document.addEventListener('pointerlockerror',pointererror);
-  const resize=()=>{const w=Math.max(1,host.clientWidth),h=Math.max(1,host.clientHeight);renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();};const observer=new ResizeObserver(resize);observer.observe(host);resize();
+  const reflections=createStoreReflections(renderer,scene,camera,quality);
+  const resize=()=>{const w=Math.max(1,host.clientWidth),h=Math.max(1,host.clientHeight);renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();reflections.resize(w,h);};const observer=new ResizeObserver(resize);observer.observe(host);resize();
   const forward=new THREE.Vector3(),right=new THREE.Vector3(),movement=new THREE.Vector3();
   const drawScreen=()=>{
     screenCtx.fillStyle='#040711';screenCtx.fillRect(0,0,768,256);
@@ -206,20 +221,28 @@ export function createStoreScene(host: HTMLDivElement, tracks: Track[], visit: V
         inspection.rotation.y=THREE.MathUtils.lerp(inspection.rotation.y,rotation,.18);
       }
     }
+    playbackGate.update(deckState.settled);
     host.dataset.vinylSpinning=String(deckState.spinning);host.dataset.vinylAngle=String(deckState.angle);
     host.dataset.recordState=phase;host.dataset.deckState=deckRequested?(deckState.settled?'playing-position':'loading-record'):'stowed';
     if(exitComplete){exitTime+=delta;const t=THREE.MathUtils.smoothstep(exitTime,0,1.4);roomLights.set(THREE.MathUtils.lerp(exitBrightness,.08,t));host.dataset.lights='dimming';}
-    else if(lightsReady){lightsTime+=delta;const t=reducedMotion?1:THREE.MathUtils.smoothstep(lightsTime,.35,2.8);roomLights.set(.08+.92*t);host.dataset.lights=t===1?'on':'warming';}
+    else if(lightsReady){lightsTime+=delta;const t=reducedMotion?1:THREE.MathUtils.smoothstep(lightsTime,.35,2.8);roomLights.set(.08+.92*t);host.dataset.lights=t===1?'on':'warming';if(t===1&&!entranceComplete){entranceComplete=true;callbacks.ready(true);}}
+    const speakerFreq=audioEngine.sample().freq;
+    const speakerPlaying=!reducedMotion&&!audioEngine.el.paused&&!audioEngine.el.ended&&!exitComplete;
+    const lightPrefs=usePreferences.getState();
+    const song=useStore.getState().current;
+    musicLighting.update(delta,speakerFreq,audioEngine.sampleRate,speakerPlaying&&entranceComplete&&lightPrefs.musicLighting,lightPrefs.musicLightIntensity,audioEngine.el.currentTime,song?.options?.bpm,song?.style??'',song?.id??'');
+    for(const {band,motion} of speakers){const energy=speakerPlaying?speakerEnergy(speakerFreq,audioEngine.sampleRate,band):0;motion.update(delta,energy);host.dataset[band==='big'?'speakerBass':'speakerTreble']=energy.toFixed(3);}
+    host.dataset.speakerPairs=String(speakers.length);
     if(time-lastScreen>1000/(quality==='low'?15:30)){drawScreen();lastScreen=time;}
-    renderer.info.reset();renderStore(renderer,scene,camera);
+    renderer.info.reset();renderStore(renderer,scene,camera,reflections.render);
     if(exitComplete&&exitTime>=1.4){const complete=exitComplete;exitComplete=null;complete();return;}
     host.dataset.drawCalls=String(renderer.info.render.calls);host.dataset.triangles=String(renderer.info.render.triangles);
   };drawScreen();frame=requestAnimationFrame(animate);
-  return {exit:(complete)=>{if(exitComplete)return;if(reducedMotion||!lightsReady){complete();return;}release();keys.clear();drag=false;returnRecord();exitBrightness=roomLights.brightness;exitTime=0;exitComplete=complete;},capture,freeLook:()=>canvas.focus(),inspect,play,flip:()=>{rotation+=Math.PI;if(inspection){inspection.rotation.y=rotation;renderStore(renderer,scene,camera);}},home:()=>{deck.close();finishReturn();camera.position.set(0,1.65,6.5);yaw=0;pitch=-.12;},dispose:()=>{
+  return {exit:(complete)=>{if(exitComplete)return;if(reducedMotion||!lightsReady){complete();return;}callbacks.ready(false);release();keys.clear();drag=false;returnRecord();exitBrightness=roomLights.brightness;exitTime=0;exitComplete=complete;},capture,freeLook:()=>canvas.focus(),inspect,play,flip:()=>{rotation+=Math.PI;if(inspection){inspection.rotation.y=rotation;renderStore(renderer,scene,camera,reflections.render);}},home:()=>{deck.close();finishReturn();camera.position.set(0,1.65,6.5);yaw=0;pitch=-.12;},dispose:()=>{
     disposed=true;Object.assign(visit,{x:camera.position.x,z:camera.position.z,yaw,pitch});cancelAnimationFrame(frame);release();observer.disconnect();
     canvas.removeEventListener('contextmenu',contextmenu);canvas.removeEventListener('webglcontextlost',contextlost);
     window.removeEventListener('keydown',keydown);window.removeEventListener('keyup',keyup);window.removeEventListener('mousemove',mousemove);window.removeEventListener('mousedown',mousedown);window.removeEventListener('mouseup',mouseup);window.removeEventListener('blur',blur);
     document.removeEventListener('pointerlockchange',pointerchange);document.removeEventListener('pointerlockerror',pointererror);
-    deck.dispose();for(const resource of resources)resource.dispose();renderer.dispose();renderer.forceContextLoss();canvas.remove();
+    reflections.dispose();deck.dispose();for(const resource of resources)resource.dispose();renderer.dispose();renderer.forceContextLoss();canvas.remove();
   }};
 }

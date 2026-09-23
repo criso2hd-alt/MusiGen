@@ -9,7 +9,7 @@ import {
   Settings,
 } from "lucide-react";
 
-export const APP_VERSION = "0.0.2";
+export const APP_VERSION = "0.0.3";
 import type { ReactNode } from "react";
 import clsx from "clsx";
 import { useStore } from "../store";

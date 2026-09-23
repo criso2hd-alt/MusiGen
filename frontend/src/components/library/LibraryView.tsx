@@ -18,6 +18,7 @@ import { usePreferences } from "../../lib/preferences";
 import { Vinyl } from "../player/Vinyl";
 import { AlbumArt } from "../player/AlbumArt";
 import { PlaylistsPanel } from "../panels/PlaylistsPanel";
+import { TrackRating } from "./TrackRating";
 import { LyricTimingButton } from "./LyricTimingButton";
 
 const RecordStore = lazy(() => import("./store3d/RecordStore"));
@@ -101,6 +102,7 @@ function TrackCard({ track, view, expanded, onExpand }: { track: Track; view: "c
         </button>
       </div>
 
+      <TrackRating track={track} />
       {editing ? (
         <input
           autoFocus

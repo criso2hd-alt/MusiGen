@@ -140,6 +140,7 @@ class LyricTiming(BaseModel):
 
 
 class Track(BaseModel):
+    rating: int = Field(default=0, ge=0, le=5, strict=True)
     id: str = Field(default_factory=lambda: _uid("trk"))
     title: str
     style: str = ""
@@ -182,6 +183,7 @@ class PlaylistReorder(BaseModel):
 
 
 class TrackUpdate(BaseModel):
+    rating: Optional[int] = Field(default=None, ge=0, le=5, strict=True)
     title: Optional[str] = None
 
 

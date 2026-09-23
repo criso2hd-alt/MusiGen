@@ -82,6 +82,8 @@ class AudioEngine {
     this.el.volume = v;
   }
 
+  get sampleRate() { return this.ctx?.sampleRate ?? 48000; }
+
   sample() {
     if (!this.analyser) return { freq: this.freq, wave: this.wave };
     this.analyser.getByteFrequencyData(this.freq);

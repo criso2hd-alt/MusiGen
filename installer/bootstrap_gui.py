@@ -394,6 +394,8 @@ def start_backend(res: Path, home: Path) -> str:
     runtime_py = home / "runtime" / "Scripts" / "python.exe"
     port = _app_port(home)
     env = dict(os.environ)
+    env["MUSIGEN_HOME"] = str(home)
+    env["MUSIGEN_RESOURCE_ROOT"] = str(res)
     env["MUSIGEN_FRONTEND_DIST"] = str(res / "frontend" / "dist")
     # Portable storage: models/, music/, data/ all inside the app folder.
     env["MUSIGEN_DATA_DIR"] = str(home / "data")

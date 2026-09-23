@@ -124,7 +124,7 @@ class MediaInstaller:
             if not missing and tools["ffmpeg_configured"]:
                 self.report("Existing tools connected — ready", status="done")
                 return
-            uv = next((p for p in [settings.REPO_ROOT / "uv.exe", settings.REPO_ROOT / "installer/vendor/uv.exe"] if p.is_file()), None)
+            uv = next((p for p in [root / relative for root in (settings.RESOURCE_ROOT, settings.REPO_ROOT) for relative in ("uv.exe", "installer/vendor/uv.exe")] if p.is_file()), None)
             uv = str(uv) if uv else shutil.which("uv")
             if not uv:
                 raise RuntimeError("uv installer is missing. Run the packaged MusiGen application to install optional tools.")

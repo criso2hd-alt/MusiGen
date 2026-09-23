@@ -350,6 +350,8 @@ async def update_track(track_id: str, req: TrackUpdate) -> Track:
         raise HTTPException(404, "Track not found")
     if req.title is not None and req.title.strip():
         t.title = req.title.strip()
+    if req.rating is not None:
+        t.rating = req.rating
     storage.add_track(t)
     return t
 

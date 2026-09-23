@@ -33,3 +33,11 @@ test('a failed foreground render restores world render state',()=>{
   assert.throws(()=>renderStore(renderer,scene,camera),/GPU interrupted/);
   assert.equal(camera.layers.mask,1);assert.equal(scene.background,background);assert.equal(renderer.autoClear,true);
 });
+
+test('reflections render only the world before the held-object depth pass',()=>{
+  const scene=new Scene(),camera=new PerspectiveCamera(),events=[];
+  const renderer={autoClear:true,clear(){},clearDepth(){events.push('depth');},render(_s,c){events.push(c.layers.mask);}};
+  renderStore(renderer,scene,camera,()=>{assert.equal(camera.layers.mask,1);events.push('reflections');});
+  assert.deepEqual(events,['reflections','depth',2]);
+  assert.equal(camera.layers.mask,1);
+});

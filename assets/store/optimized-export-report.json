@@ -1,7 +1,7 @@
 {
-  "primitives": 1,
+  "primitives": 3,
   "materials": 1,
-  "triangles": 41600,
+  "triangles": 41788,
   "uv_out_of_bounds": 0,
   "uv_degenerate_triangles": 0,
   "sampled_overlap_pixels": 0

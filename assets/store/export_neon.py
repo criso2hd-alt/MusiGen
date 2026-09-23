@@ -5,7 +5,7 @@ root=Path(__file__).resolve().parents[2]
 selected=[]
 for original in list(bpy.context.scene.objects):
  if original.type!='MESH' or original.hide_render:continue
- keep={i for i,m in enumerate(original.data.materials) if m and m.name in {'Rose neon','Ice neon'}}
+ keep={i for i,m in enumerate(original.data.materials) if m and m.name in {'Rose neon','Ice neon','redLight'}}
  if not keep:continue
  obj=original.copy();obj.data=original.data.copy();bpy.context.collection.objects.link(obj)
  bm=bmesh.new();bm.from_mesh(obj.data)

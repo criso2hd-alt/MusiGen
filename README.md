@@ -21,6 +21,26 @@ Generate complete songs — music *and* lyrics — on your own GPU, with a Napst
 
 ---
 
+## New in v0.0.3
+
+**Your record store now reacts to the music.** Independent lighting zones blend smoothly across the room, neon colors change with playback, and the MusiGen sign gets a moving brightness chase. Saved BPM and style guide the sequences; an audio-based tempo estimate is used when BPM is unavailable.
+
+![Music-reactive lighting in the actual app](docs/screenshots/store-lightshow-v003.png)
+
+- **Music lighting controls:** switch the show on or off and adjust its intensity. Alternating zones, sweeps and chases replace the shared color pulse. Reduced motion disables animated lighting and speaker movement.
+- **Frequency-driven speakers:** large cones respond to bass/mids and small cones to highs, with quick attacks and smooth release. No looping oscillator.
+- **Softer room finishes:** moodier lighting and filtered environment reflections on the floor and ceiling. These are approximate real-time reflections, not a Cycles render or exact mirrors.
+- **Better record handling:** playback waits until the vinyl lands; Space/right-click toggles play/pause. Thin sleeves, a clearer control guide, readable hover buttons, and welcome instructions that stay dismissed after browsing.
+- **Rate your music:** persistent 1–5 star ratings on library cards, with a Clear option.
+- **Clearer captions:** synchronized-lyrics actions select timed phrases and jump into the vocal range when needed. Recognition was tested on a generated vocal track, but sung-word timing remains experimental and may miss or mis-time words.
+- **Optional-tools repair:** fixed the missing `REPO_ROOT` error and separated portable-home paths from bundled resources when locating the SheetSage2 installer tools.
+
+| Music lighting and reflections | Library ratings |
+| :---: | :---: |
+| ![Neon Boutique in v0.0.3](docs/screenshots/store-overview-v003.png) | ![Five-star song ratings](docs/screenshots/library-ratings-v003.png) |
+
+These are actual app screenshots. Download **[v0.0.3](https://github.com/criso2hd-alt/MusiGen/releases/tag/v0.0.3)**. To update, close MusiGen and replace only the EXE in your existing folder; keep your models, runtime, data and music.
+
 ## New in v0.0.2
 
 **Step inside your music collection.** The Neon Boutique is a first-person, 1980s-inspired record shop built into MusiGen. Walk between walnut crates, pick up an album, inspect its artwork, and play it on an animated turntable—all without leaving the app.

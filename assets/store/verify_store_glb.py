@@ -14,6 +14,7 @@ def accessor(index):
  return np.ndarray((a['count'],dim),dtype=dtype,buffer=binary,offset=offset,strides=(v.get('byteStride',dim*dtype.itemsize),dtype.itemsize))
 primitives=[p for m in g['meshes'] for p in m['primitives']]
 report={'primitives':len(primitives),'materials':len(g['materials']),'triangles':0,'uv_out_of_bounds':0,'uv_degenerate_triangles':0,'sampled_overlap_pixels':0}
+occupied=np.zeros((1024,1024),dtype=np.uint16)
 for p in primitives:
  uv=accessor(p['attributes']['TEXCOORD_0']);indices=accessor(p['indices']).reshape(-1,3)
  tris=uv[indices].astype(np.float64);report['triangles']+=len(tris)
@@ -21,7 +22,6 @@ for p in primitives:
  report['uv_out_of_bounds']+=int(((uv<-.00001)|(uv>1.00001)).any(axis=1).sum())
  a=tris[:,1]-tris[:,0];b=tris[:,2]-tris[:,0];area=a[:,0]*b[:,1]-a[:,1]*b[:,0]
  report['uv_degenerate_triangles']+=int((np.abs(area)<1e-12).sum())
- occupied=np.zeros((1024,1024),dtype=np.uint16)
  for tri in tris:
   t=tri*1024;lo=np.maximum(0,np.floor(t.min(axis=0)).astype(int));hi=np.minimum(1023,np.ceil(t.max(axis=0)).astype(int))
   if (hi<lo).any():continue
@@ -31,7 +31,7 @@ for p in primitives:
    start=t[k];end=t[(k+1)%3];edges.append((end[0]-start[0])*(yy-start[1])-(end[1]-start[1])*(xx-start[0]))
   inside=(np.minimum.reduce(edges)>1e-6)|(np.maximum.reduce(edges)<-1e-6)
   occupied[lo[1]:hi[1]+1,lo[0]:hi[0]+1]+=inside
- report['sampled_overlap_pixels']+=int((occupied>1).sum())
+report['sampled_overlap_pixels']=int((occupied>1).sum())
 assert report['uv_out_of_bounds']==report['uv_degenerate_triangles']==report['sampled_overlap_pixels']==0,report
 (root/'assets/store/optimized-export-report.json').write_text(json.dumps(report,indent=2))
 print(json.dumps(report,indent=2))

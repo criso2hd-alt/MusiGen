@@ -1,4 +1,6 @@
 import json
+import os
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -32,3 +34,23 @@ class MediaInstallTests(unittest.TestCase):
   with self.assertRaises(ValueError):installer.start('unknown')
   installer.state['status']='installing'
   with self.assertRaises(ValueError):installer.start('reference')
+
+class PortablePathTests(unittest.TestCase):
+ def test_home_override_and_extracted_resources_stay_separate(self):
+  with tempfile.TemporaryDirectory() as root:
+   home=Path(root)/'portable'; resources=Path(root)/'extracted'
+   with patch.dict(os.environ,{'MUSIGEN_HOME':str(home),'MUSIGEN_RESOURCE_ROOT':str(resources)}):
+    self.assertEqual(settings.REPO_ROOT,home.resolve())
+    self.assertEqual(settings.RESOURCE_ROOT,resources)
+ def test_frozen_home_uses_executable_not_extraction(self):
+  with tempfile.TemporaryDirectory() as root:
+   with patch.dict(os.environ,{},clear=True),patch.object(sys,'frozen',True,create=True),patch.object(sys,'executable',str(Path(root)/'MusiGen.exe')):
+    self.assertEqual(settings.REPO_ROOT,Path(root).resolve())
+ def test_missing_tools_reaches_runtime_using_bundled_uv(self):
+  with tempfile.TemporaryDirectory() as root:
+   root=Path(root); resources=root/'resources';resources.mkdir();(resources/'uv.exe').touch()
+   installer=MediaInstaller()
+   with patch.dict(os.environ,{'MUSIGEN_HOME':str(root/'home'),'MUSIGEN_RESOURCE_ROOT':str(resources)}),patch.object(settings,'DATA_DIR',root/'data'),patch('app.media_install.repair',return_value={'reference_missing':['model'],'midi_missing':[],'ffmpeg_configured':False}),patch('app.media_install.subprocess.Popen',side_effect=RuntimeError('reached isolated runtime')) as launch:
+    installer._run('reference')
+    self.assertEqual(launch.call_args.args[0][0],str(resources/'uv.exe'))
+    self.assertIn('reached isolated runtime',installer.status()['message'])

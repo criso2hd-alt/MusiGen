@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
     await telemetry.stop()
 
 
-app = FastAPI(title="MusiGen", version="0.0.2", lifespan=lifespan)
+app = FastAPI(title="MusiGen", version="0.0.3", lifespan=lifespan)
 
 
 @app.exception_handler(ModelBusy)

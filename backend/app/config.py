@@ -6,6 +6,7 @@ large model cache can be kept off the C: drive.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 # Trust the OS certificate store so HTTPS (Hugging Face downloads) works behind
@@ -22,6 +23,7 @@ os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 # Repo root = two levels up from this file (backend/app/config.py -> repo root).
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SOURCE_ROOT = REPO_ROOT
 
 
 def _env(name: str, default: str) -> str:
@@ -33,12 +35,25 @@ def _env_path(name: str, default: Path) -> Path:
 
 
 class Settings:
+    @property
+    def REPO_ROOT(self) -> Path:
+        """Writable portable home, distinct from bundled application resources."""
+        if os.environ.get('MUSIGEN_HOME'):
+            return Path(os.environ['MUSIGEN_HOME']).resolve()
+        if getattr(sys, 'frozen', False):
+            return Path(sys.executable).resolve().parent
+        return REPO_ROOT
+
+    @property
+    def RESOURCE_ROOT(self) -> Path:
+        return _env_path('MUSIGEN_RESOURCE_ROOT', Path(getattr(sys, '_MEIPASS', REPO_ROOT)))
+
     # Which engine backs generation: "stub" (no GPU) or "yue2" (real model).
     ENGINE: str = _env("MUSIGEN_ENGINE", "stub")
 
     # Storage. In the portable app these are pointed at folders next to the EXE
     # (models/, music/, data/) via env vars; the defaults keep dev self-contained.
-    DATA_DIR: Path = _env_path("MUSIGEN_DATA_DIR", REPO_ROOT / "data")
+    DATA_DIR: Path = _env_path("MUSIGEN_DATA_DIR", SOURCE_ROOT / "data")
 
     @property
     def AUDIO_DIR(self) -> Path:

@@ -21,6 +21,16 @@ Generate complete songs — music *and* lyrics — on your own GPU, with a Napst
 
 ---
 
+## New in v0.0.5
+
+**Sheet music for every song.** Click **Score** on a song to see the notation MusiGen planned for it: vocal and instrument staves, chord symbols, key and tempo.
+
+- **Follow along:** the notes light up as the song plays.
+- **Print or save as PDF** to play it yourself.
+- **Export MIDI** (multi-track) or **ABC** to rebuild the song in your DAW or notation app.
+
+Download **[v0.0.5](https://github.com/criso2hd-alt/MusiGen/releases/tag/v0.0.5)**. To update, close MusiGen and replace only the EXE in your existing folder; keep your models, runtime, python, data and music folders. [Full release notes](docs/releases/v0.0.5.md)
+
 ## New in v0.0.4
 
 A bug-fix release driven by reports from our Discord testers:

@@ -209,3 +209,20 @@ select { color-scheme: dark; }
 .resource-meter::-webkit-progress-bar { background: rgb(255 255 255 / .1); border-radius: 999px; }
 .resource-meter::-webkit-progress-value { background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 999px; transition: width .3s ease; }
 .resource-meter::-moz-progress-bar { background: var(--accent); border-radius: 999px; }
+
+/* ---- Sheet music ---- */
+/* Notes currently sounding while "Follow" is on. */
+#mg-score-paper .mg-score-active { fill: var(--accent-3) !important; stroke: var(--accent-3); }
+/* Print just the score (a plain top-level copy), black on white, breaking pages
+   between systems. */
+#mg-print-root { display: none; }
+@media print {
+  html.printing-score, html.printing-score body {
+    background: #fff !important; height: auto !important; overflow: visible !important;
+  }
+  html.printing-score body > *:not(#mg-print-root) { display: none !important; }
+  html.printing-score #mg-print-root { display: block; color: #000; }
+  html.printing-score #mg-print-root svg { width: 100% !important; height: auto; }
+  html.printing-score #mg-print-root > div,
+  html.printing-score #mg-print-root svg { break-inside: avoid; page-break-inside: avoid; }
+}

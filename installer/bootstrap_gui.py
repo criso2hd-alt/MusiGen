@@ -335,6 +335,46 @@ def _runtime_portable(home: Path) -> bool:
     return _runtime_runs(home)
 
 
+EXPORT_KINDS = {
+    "midi": ("MIDI file (*.mid)", ".mid", {".mid", ".midi"}),
+    "abc": ("ABC notation (*.abc)", ".abc", {".abc", ".txt"}),
+}
+EXPORT_MAX_BYTES = 20 * 1024 * 1024
+
+
+def _export_path(chosen: str, kind: str) -> Path:
+    """Force an allowed extension for the export kind (never e.g. .exe)."""
+    _, default_ext, allowed = EXPORT_KINDS[kind]
+    path = Path(chosen)
+    return path if path.suffix.lower() in allowed else path.with_name(path.name + default_ext)
+
+
+def _save_export(webview, suggested_name: str, data_b64: str, kind: str):
+    import base64
+    import binascii
+
+    if kind not in EXPORT_KINDS:
+        return None
+    try:
+        data = base64.b64decode(data_b64 or "", validate=True)
+    except (binascii.Error, ValueError):
+        return None
+    if not data or len(data) > EXPORT_MAX_BYTES:
+        return None
+    wins = webview.windows
+    if not wins:
+        return None
+    label, default_ext, _ = EXPORT_KINDS[kind]
+    name = Path(suggested_name or f"score{default_ext}").name
+    r = wins[0].create_file_dialog(webview.SAVE_DIALOG, save_filename=name,
+                                   file_types=(label, "All files (*.*)"))
+    if not r:
+        return None
+    path = _export_path(r if isinstance(r, str) else r[0], kind)
+    path.write_bytes(data)
+    return str(path)
+
+
 def _uv_path(res: Path) -> Path:
     uv = res / "uv.exe"
     return uv if uv.exists() else res / "installer" / "vendor" / "uv.exe"  # dev layout
@@ -596,6 +636,11 @@ def main() -> int:
             if not r:
                 return None
             return r[0] if isinstance(r, (list, tuple)) else r
+
+        def save_file(self, suggested_name: str, data_b64: str, kind: str = "midi"):
+            """Save generated sheet-music exports (MIDI / ABC) where the user picks.
+            Only these kinds and extensions are written, at most 20 MB."""
+            return _save_export(webview, suggested_name, data_b64, kind)
 
         def open_external(self, url: str):
             """Open a URL in the user's real browser (not inside the app window)."""

@@ -193,6 +193,9 @@ interface State {
   trayW: number;
   playerH: number;
 
+  // sheet music panel (track whose score is open)
+  sheetTrack: Track | null;
+
   // export + toast
   exportTarget: Track | null;
   lastFolder: string;
@@ -271,6 +274,9 @@ interface State {
   // layout actions
   setSize: (key: "sidebarW" | "trayW" | "playerH", px: number) => void;
 
+  openSheet: (t: Track) => void;
+  closeSheet: () => void;
+
   // export + toast actions
   openExport: (t: Track) => void;
   closeExport: () => void;
@@ -337,6 +343,7 @@ export const useStore = create<State>((set, get) => ({
   trayW: num("mg.trayW", 340),
   playerH: num("mg.playerH", 112),
 
+  sheetTrack: null,
   exportTarget: null,
   lastFolder: ls.get("mg.lastFolder", ""),
   toast: null,
@@ -755,6 +762,8 @@ export const useStore = create<State>((set, get) => ({
     set({ [key]: val } as any);
   },
 
+  openSheet: (t) => set({ sheetTrack: t }),
+  closeSheet: () => set({ sheetTrack: null }),
   openExport: (t) => set({ exportTarget: t }),
   closeExport: () => set({ exportTarget: null }),
   exportTrack: async (folder, format, filename) => {

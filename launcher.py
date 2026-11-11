@@ -137,6 +137,13 @@ def main() -> int:
             except Exception:
                 return False
 
+        def save_file(self, suggested_name: str, data_b64: str, kind: str = "midi"):
+            # Same validated implementation as the packaged app.
+            sys.path.insert(0, str(Path(__file__).resolve().parent / "installer"))
+            from bootstrap_gui import _save_export
+
+            return _save_export(webview, suggested_name, data_b64, kind)
+
     webview.create_window(
         "MusiGen",
         base,

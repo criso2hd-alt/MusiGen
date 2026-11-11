@@ -11,9 +11,11 @@ import {
   Wand2,
   Image as ImageIcon,
   Loader2,
+  FileMusic,
 } from "lucide-react";
 import { useStore } from "../../store";
 import type { Track } from "../../lib/types";
+import { trackScore } from "../../lib/score";
 import { usePreferences } from "../../lib/preferences";
 import { Vinyl } from "../player/Vinyl";
 import { AlbumArt } from "../player/AlbumArt";
@@ -43,6 +45,7 @@ function TrackCard({ track, view, expanded, onExpand }: { track: Track; view: "c
   const playlists = useStore((s) => s.playlists);
   const addToPlaylist = useStore((s) => s.addToPlaylist);
   const openExport = useStore((s) => s.openExport);
+  const openSheet = useStore((s) => s.openSheet);
   const remixTrack = useStore((s) => s.remixTrack);
   const generateCover = useStore((s) => s.generateCover);
   const coverBusy = useStore((s) => s.coverBusy[track.id]);
@@ -171,6 +174,13 @@ function TrackCard({ track, view, expanded, onExpand }: { track: Track; view: "c
           title="Save to a file…"
         >
           <FolderDown size={14} /><span className="ml-1 text-xs">Save</span>
+        </button>
+        <button
+          onClick={() => openSheet(track)}
+          className={`inline-flex items-center rounded-lg bg-white/5 p-1.5 hover:bg-[var(--accent)]/20 hover:text-[var(--accent)] ${trackScore(track) ? "text-[var(--muted)]" : "text-[var(--muted)]/50"}`}
+          title={trackScore(track) ? "Sheet music — view, print or export MIDI" : "No sheet music: this song was made with Chain-of-thought off"}
+        >
+          <FileMusic size={14} /><span className="ml-1 text-xs">Score</span>
         </button>
         <button
           onClick={() => deleteTrack(track.id)}

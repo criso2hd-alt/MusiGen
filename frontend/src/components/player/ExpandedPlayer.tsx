@@ -10,6 +10,7 @@ import {
   Sparkles,
   SlidersHorizontal,
   Captions,
+  FileMusic,
 } from "lucide-react";
 import { useStore } from "../../store";
 import { Visualizer } from "./Visualizer";
@@ -45,6 +46,7 @@ export function ExpandedPlayer() {
   const prev = useStore((s) => s.prev);
   const setPlayerExpanded = useStore((s) => s.setPlayerExpanded);
   const openExport = useStore((s) => s.openExport);
+  const openSheet = useStore((s) => s.openSheet);
 
   // Esc always exits the maximized view (safety against getting "locked in").
   useEffect(() => {
@@ -112,6 +114,14 @@ export function ExpandedPlayer() {
             }`}
           >
             <Captions size={16} /> Lyrics
+          </button>
+          <button
+            onClick={() => current && openSheet(current)}
+            disabled={!current}
+            title="Sheet music for this song — follow along, print or export MIDI"
+            className="flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-2 text-sm hover:bg-white/10 disabled:opacity-30"
+          >
+            <FileMusic size={16} /> Score
           </button>
           <button
             onClick={() => current && openExport(current)}

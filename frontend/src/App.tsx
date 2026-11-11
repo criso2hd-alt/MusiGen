@@ -10,6 +10,7 @@ import { SetupView } from "./components/setup/SetupView";
 import { PlayerBar } from "./components/player/PlayerBar";
 import { ExpandedPlayer } from "./components/player/ExpandedPlayer";
 import { ExportDialog } from "./components/ExportDialog";
+import { SheetMusic } from "./components/library/SheetMusic";
 import { Toast } from "./components/Toast";
 import { Resizer } from "./components/Resizer";
 
@@ -53,6 +54,7 @@ export default function App() {
       </div>
 
       <ExpandedPlayer />
+      <SheetMusic />
       <ExportDialog />
       <Toast />
       <StudioTour />

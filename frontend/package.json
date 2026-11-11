@@ -14,6 +14,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@tailwindcss/vite": "^4.3.3",
+    "abcjs": "^6.7.2",
     "butterchurn": "^2.6.7",
     "butterchurn-presets": "^2.4.7",
     "clsx": "^2.1.1",

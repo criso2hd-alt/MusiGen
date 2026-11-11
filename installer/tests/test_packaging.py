@@ -112,6 +112,36 @@ class PackagingTests(unittest.TestCase):
                 self.assertEqual(Path(env['UV_CACHE_DIR']), home / 'downloads' / 'uv-cache')
                 self.assertEqual(env['PYTHONUTF8'], '1')
 
+    def test_sheet_music_export_writes_only_safe_files(self):
+        import base64
+
+        with tempfile.TemporaryDirectory() as directory:
+            chosen = {"path": str(Path(directory) / "song.mid")}
+            window = SimpleNamespace(create_file_dialog=lambda *a, **k: chosen["path"])
+            fake_webview = SimpleNamespace(windows=[window], SAVE_DIALOG=30)
+            midi = b"MThd\x00\x00\x00\x06\x00\x01\x00\x02\x01\xe0"
+            b64 = base64.b64encode(midi).decode()
+
+            saved = launcher._save_export(fake_webview, "song.mid", b64, "midi")
+            self.assertEqual(Path(saved).read_bytes(), midi)
+
+            # A disallowed extension is never written as-is.
+            chosen["path"] = str(Path(directory) / "evil.exe")
+            saved = launcher._save_export(fake_webview, "evil.exe", b64, "midi")
+            self.assertTrue(saved.endswith("evil.exe.mid"))
+            self.assertFalse((Path(directory) / "evil.exe").exists())
+
+            # Unknown kinds, invalid base64, empty and oversized data are refused.
+            self.assertIsNone(launcher._save_export(fake_webview, "x.bat", b64, "bat"))
+            self.assertIsNone(launcher._save_export(fake_webview, "x.mid", "not base64!", "midi"))
+            self.assertIsNone(launcher._save_export(fake_webview, "x.mid", "", "midi"))
+            with patch.object(launcher, "EXPORT_MAX_BYTES", 4):
+                self.assertIsNone(launcher._save_export(fake_webview, "x.mid", b64, "midi"))
+
+            # Cancelling the dialog writes nothing.
+            chosen["path"] = None
+            self.assertIsNone(launcher._save_export(fake_webview, "x.abc", b64, "abc"))
+
     def test_incomplete_download_is_not_reused_as_a_wheel(self):
         response = io.BytesIO(b'partial')
         response.headers = {'Content-Length': '100'}

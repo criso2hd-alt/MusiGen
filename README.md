@@ -21,6 +21,19 @@ Generate complete songs — music *and* lyrics — on your own GPU, with a Napst
 
 ---
 
+## New in v0.0.4
+
+A bug-fix release driven by reports from our Discord testers:
+
+- **Lyrics in any language** — Romanian (ș, ț, …) and other non‑Latin‑1 lyrics no longer crash generation.
+- **Truly portable** — Python and its cache now live inside the MusiGen folder, so the app no longer depends on drive C:. This fixes "backend did not start" on PCs that reset C: on reboot (e.g. Shadow Defender). Existing installs convert automatically and keep everything installed.
+- **Full‑length instrumentals** — wordless songs now fill the duration you choose.
+- **Clear the queue** — remove finished jobs; they no longer return after a restart.
+- **Structure chips drive the lyrics** — sections you add or reorder show up in the lyrics box, and "Apply to lyrics" reorders written lyrics without losing text.
+- An optional, experimental **Supra2‑IMG** cover‑art model in Setup.
+
+Download **[v0.0.4](https://github.com/criso2hd-alt/MusiGen/releases/tag/v0.0.4)**. To update, close MusiGen and replace only the EXE in your existing folder; keep your models, runtime, data and music. [Full release notes](docs/releases/v0.0.4.md)
+
 ## New in v0.0.3
 
 **Your record store now reacts to the music.** Independent lighting zones blend smoothly across the room, neon colors change with playback, and the MusiGen sign gets a moving brightness chase. Saved BPM and style guide the sequences; an audio-based tempo estimate is used when BPM is unavailable.
@@ -68,7 +81,7 @@ These are actual app screenshots at **2560 × 1440**; click an image to view it 
 - ✍️ **AI lyric writer** — a local **Qwen2.5** model writes structured `[verse]/[chorus]/[bridge]` lyrics and silently composes the generation prompt from your mix. Pick the size that fits your disk (0.5B / 3B / 7B).
 - 🧪 **The Mixer** — drag & drop **"pills"** (genres, moods, feelings, instruments, pacing…) into the mixer; the AI gathers them into a rich style prompt. A magnifying **orbit view** makes browsing 250+ tags fun.
 - 🌈 **Winamp‑nostalgia visualizers** — a full **Milkdrop** engine (via [Butterchurn](https://github.com/jberg/butterchurn)) with **367 presets**, auto‑cycle, a pinnable default, and a per‑preset enable/disable rotation — plus lightweight built‑in skins. Drag the player past ⅓ of the screen and it fades into Milkdrop automatically.
-- 🖼️ **AI cover art** — a local **SD‑Turbo** model paints an album cover from each song's title + lyrics + style. When you press play, the flat cover fades into a spinning vinyl whose label *is* the artwork.
+- 🖼️ **AI cover art** — generate artwork from a song's title + lyrics + style with local SD‑Turbo, or try the optional **Supra2‑IMG** experiment in Setup. When you press play, the flat cover fades into a spinning vinyl whose label *is* the artwork.
 - 📀 **Library & playlists** — organise tracks, rename, remix (loads a song's whole recipe back into the mixer with a fresh seed), and save with **lyrics + cover art embedded** into the FLAC.
 - 🎧 **Smooth playback** — songs cross‑fade in and out; a persistent bottom player follows you across every tab.
 - 📦 **Truly portable** — ships as a ZIP. Extract, run, and it installs its runtime and downloads only the models you choose, all **inside its own folder**. Delete the folder and it's gone — nothing touches AppData or the registry, nothing runs in the background.

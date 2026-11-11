@@ -16,6 +16,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Wand2, Loader2, Plus, X, Copy, GripVertical } from "lucide-react";
 import { useStore } from "../../store";
+import { applyStructure, hasNoWords, skeleton, tagsOf } from "../../lib/lyricStructure";
 import { api } from "../../lib/api";
 import type { LyricFit } from "../../lib/types";
 
@@ -102,9 +103,21 @@ export function LyricsPanel() {
   // Local {id,name}[] mirror of the structure (stable ids for drag).
   const [items, setItems] = useState<Item[]>(() => structure.map(mk));
   useEffect(() => {
-    setLyricsStructure(items.map((i) => i.name));
+    const names = items.map((i) => i.name);
+    setLyricsStructure(names);
+    // While the lyrics have no words yet, they simply follow the chips, so adding,
+    // removing or reordering a section is visible in the text immediately.
+    const current = useStore.getState().lyrics;
+    if (hasNoWords(current)) {
+      const next = skeleton(names);
+      if (next !== current) setLyrics(next);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
+
+  const names = items.map((i) => i.name.toLowerCase());
+  const outOfStep =
+    !hasNoWords(lyrics) && tagsOf(lyrics).join("|") !== names.join("|");
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -186,6 +199,18 @@ export function LyricsPanel() {
             </div>
           </SortableContext>
         </DndContext>
+        {outOfStep && (
+          <div className="mt-2 flex items-center gap-2 rounded-lg bg-[var(--accent-3)]/10 px-2 py-1.5 text-[11px] text-[var(--muted)]">
+            <span className="flex-1">The lyrics' sections don't match the structure.</span>
+            <button
+              onClick={() => setLyrics(applyStructure(lyrics, items.map((i) => i.name)))}
+              title="Reorder the lyrics to follow the chips. Written text is kept: each chip reuses its section's lines, and anything unmatched stays at the end."
+              className="rounded-md bg-[var(--accent-3)]/20 px-2 py-0.5 font-medium text-[var(--accent-3)] hover:bg-[var(--accent-3)]/30"
+            >
+              Apply to lyrics
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="mb-2 flex gap-2">
@@ -229,7 +254,7 @@ export function LyricsPanel() {
       </div>}
       {error && <p role="alert" className="mt-2 text-sm text-amber-300">{error}</p>}
       <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-        Sections above become <code>[tags]</code> the writer fills{" "}
+        Sections above set the song's <code>[tags]</code> — type lyrics under each, or let the writer fill them{" "}
         {!llmReady && !ollama && "· install the lyric model in Setup for real AI lyrics"}
       </p>
     </div>

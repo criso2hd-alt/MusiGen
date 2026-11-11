@@ -168,10 +168,17 @@ class YuE2Engine(MusicEngine):
 
         boundary()
 
+        from ..instrumental import has_words, instrumental_lyrics
         from ..reference_arrangement import retime_score
+        lyrics = req.lyrics or ""
+        if not has_words(lyrics) and not req.abc:
+            # Wordless request: give YuE2 enough empty sections to plan the full
+            # duration (a lone "[verse]" planned only ~60 s). A supplied score
+            # already defines the length, so it is left alone.
+            lyrics = instrumental_lyrics(lyrics, req.max_duration)
         song_request = SongRequest(
             style=req.style,
-            lyrics=req.lyrics or "[verse]\n",
+            lyrics=lyrics or "[verse]\n",
             cot=req.cot,
             seed=req.seed,
             abc=retime_score(req.abc, req.arrangement_bpm),

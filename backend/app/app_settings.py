@@ -53,3 +53,14 @@ def get_llm_model() -> str:
 
 def set_llm_model(repo: str) -> None:
     set("llm_model", repo)
+
+
+def get_cover_model() -> str:
+    """Selected local cover-art model, defaulting to the proven SD-Turbo path."""
+    return get("cover_model", "sd-turbo")
+
+
+def set_cover_model(model: str) -> None:
+    if model not in {"sd-turbo", "supra2-img"}:
+        raise ValueError("Unknown cover-art model")
+    set("cover_model", model)

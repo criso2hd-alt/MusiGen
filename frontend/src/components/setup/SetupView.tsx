@@ -120,6 +120,11 @@ const MODEL_META: Record<string, { label: string; size: string; note: string }> 
     size: "~2.5 GB",
     note: "Generates album covers from a description, on your GPU. Optional.",
   },
+  supra_cover: {
+    label: "Supra2-IMG (experimental)",
+    size: "~1.7 GB",
+    note: "104M image transformer; native 256px covers are upscaled to fit. Includes a text encoder and VAE.",
+  },
 };
 
 function ModelRow({ id }: { id: string }) {
@@ -261,7 +266,36 @@ function ModelDownloads() {
       <LlmPicker />
       <ModelRow id="llm" />
       <ModelRow id="cover" />
+      <CoverModelPicker />
+      <ModelRow id="supra_cover" />
     </>
+  );
+}
+
+function CoverModelPicker() {
+  const selected = useStore((s) => s.coverModel);
+  const fetchOptions = useStore((s) => s.fetchCoverOptions);
+  const selectModel = useStore((s) => s.selectCoverModel);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { void fetchOptions(); }, [fetchOptions]);
+  return (
+    <div className="mt-3 rounded-xl bg-black/30 p-3">
+      <label className="mb-1 block text-sm font-medium">Cover art model</label>
+      <select
+        value={selected}
+        disabled={busy}
+        onChange={async (event) => {
+          setBusy(true);
+          try { await selectModel(event.target.value); }
+          finally { setBusy(false); }
+        }}
+        className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm"
+      >
+        <option value="sd-turbo">SD-Turbo — current model</option>
+        <option value="supra2-img">Supra2-IMG — experimental, 256px</option>
+      </select>
+      <p className="mt-1 text-xs text-[var(--muted)]">The change applies to new cover generations; existing covers are kept.</p>
+    </div>
   );
 }
 

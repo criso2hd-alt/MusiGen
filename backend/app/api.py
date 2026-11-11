@@ -176,19 +176,44 @@ async def llm_options() -> dict:
     return {"selected": selected, "options": options}
 
 
+@router.get("/cover/options")
+async def cover_options() -> dict:
+    from . import app_settings, model_manager
+
+    return {
+        "selected": app_settings.get_cover_model(),
+        "options": [
+            {"key": "sd-turbo", "label": "SD-Turbo", "engine": "cover", "ready": model_manager.is_ready("cover"), "size": "~2.5 GB", "note": "Current 512px artwork model."},
+            {"key": "supra2-img", "label": "Supra2-IMG (experimental)", "engine": "supra_cover", "ready": model_manager.is_ready("supra_cover"), "size": "~1.7 GB", "note": "104M image transformer; 256px native output, upscaled to fit cover cards. Includes text encoder and VAE."},
+        ],
+    }
+
+
+@router.put("/cover/options")
+async def set_cover_options(req: dict) -> dict:
+    from . import app_settings, model_manager
+
+    selected = str(req.get("selected", ""))
+    if selected not in {"sd-turbo", "supra2-img"}:
+        raise HTTPException(400, "Unknown cover-art model")
+    app_settings.set_cover_model(selected)
+    return await cover_options()
+
+
 @router.post("/tracks/{track_id}/cover", response_model=Track)
 async def make_cover(track_id: str, req: dict | None = None) -> Track:
     """Generate an album cover for a track (AI writes the image prompt from the
     title + style + lyrics unless a custom prompt is supplied)."""
-    from . import cover as cover_mod, model_manager
+    from . import cover as cover_mod, model_manager, app_settings
     from .prompt_composer import write_cover_prompt
 
     t = storage.get_track(track_id)
     if not t:
         raise HTTPException(404, "Track not found")
-    if not model_manager.is_ready("cover"):
+    cover_key = "supra_cover" if app_settings.get_cover_model() == "supra2-img" else "cover"
+    if not model_manager.is_ready(cover_key):
         raise HTTPException(
-            400, "Cover model isn't downloaded yet — get it in Setup → Models & Engines."
+            400, "Selected cover-art model isn't downloaded yet — get it in Setup → Models & Engines."
         )
 
     body = req or {}
@@ -296,6 +321,15 @@ async def generate(req: GenerateRequest) -> Job:
 @router.get("/jobs", response_model=list[Job])
 async def list_jobs() -> list[Job]:
     return sorted(jobs.jobs.values(), key=lambda j: j.created_at, reverse=True)
+
+
+@router.post("/jobs/clear")
+async def clear_jobs(req: dict | None = None) -> dict:
+    """Remove finished jobs from the queue (all, or only the given ids)."""
+    ids = (req or {}).get("ids")
+    if ids is not None and not (isinstance(ids, list) and all(isinstance(i, str) for i in ids)):
+        raise HTTPException(400, "ids must be a list of job ids")
+    return {"cleared": jobs.clear_finished(ids)}
 
 
 @router.get("/jobs/{job_id}", response_model=Job)

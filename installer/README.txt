@@ -10,7 +10,8 @@ HOW TO USE
 
 EVERYTHING STAYS IN THIS FOLDER
 On first run MusiGen creates these subfolders right next to the EXE:
-   runtime\    - the Python runtime it installs
+   python\     - a private copy of Python (nothing is installed on C:)
+   runtime\    - the Python environment it installs
    models\     - all downloaded AI models (music, lyrics, cover art)
    music\      - your generated songs
    data\       - the library database + cover images

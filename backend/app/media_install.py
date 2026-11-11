@@ -129,7 +129,10 @@ class MediaInstaller:
             if not uv:
                 raise RuntimeError("uv installer is missing. Run the packaged MusiGen application to install optional tools.")
             # These environment variables affect only child installation commands.
-            env = dict(os.environ, UV_CACHE_DIR=str(folder / "uv-cache"), UV_PYTHON_INSTALL_DIR=str(folder / "python"))
+            # only-managed keeps these interpreters inside the app folder rather than
+            # binding the tool environments to a system Python on drive C:.
+            env = dict(os.environ, UV_CACHE_DIR=str(folder / "uv-cache"), UV_PYTHON_INSTALL_DIR=str(folder / "python"),
+                       UV_PYTHON_PREFERENCE="only-managed", PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
             def command(args):
                 self.check()
                 # Explicit child environment; never mutate the live music runtime.

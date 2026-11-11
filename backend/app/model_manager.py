@@ -40,6 +40,8 @@ def _repos(key: str) -> list[str]:
         return [app_settings.get_llm_model()]
     if key == "cover":
         return ["stabilityai/sd-turbo"]
+    if key == "supra_cover":
+        return ["SupraLabs/Supra2-IMG", "google/flan-t5-base", "stabilityai/sd-vae-ft-mse"]
     return []
 
 
@@ -80,6 +82,11 @@ def cover_dir() -> Path:
     return settings.HF_CACHE_DIR / "cover-model"
 
 
+def supra_cover_dir() -> Path:
+    """Local components for the experimental Supra2-IMG cover pipeline."""
+    return settings.HF_CACHE_DIR / "supra-cover"
+
+
 def clear_total_cache() -> None:
     _total_cache.clear()
 
@@ -90,6 +97,8 @@ def _targets(key: str) -> list[Path]:
         return [llm_dir()]
     if key == "cover":
         return [cover_dir()]
+    if key == "supra_cover":
+        return [supra_cover_dir()]
     return [settings.HF_CACHE_DIR / f"models--{r.replace('/', '--')}" for r in _repos(key)]
 
 
@@ -110,6 +119,16 @@ def is_ready(key: str) -> bool:
         return all(
             any((d / sub).glob("*.fp16.safetensors"))
             for sub in ("unet", "vae", "text_encoder")
+        )
+    if key == "supra_cover":
+        root = supra_cover_dir()
+        return (
+            (root / "dit" / "model_final_ema.pt").is_file()
+            and (root / "text" / "config.json").is_file()
+            and (root / "text" / "spiece.model").is_file()
+            and any((root / "text").glob("*.safetensors"))
+            and (root / "vae" / "config.json").is_file()
+            and any((root / "vae").glob("*.safetensors"))
         )
     for d in _targets(key):
         snap = d / "snapshots"
@@ -136,10 +155,10 @@ def total_bytes(key: str) -> int:
     from huggingface_hub import HfApi
 
     api = HfApi()
-    allow = _ALLOW.get(key)
     tot = 0
     for r in _repos(key):
         info = api.repo_info(r, files_metadata=True)
+        allow = _supra_allow(r) if key == "supra_cover" else _ALLOW.get(key)
         for s in info.siblings:
             if any(fnmatch.fnmatch(s.rfilename, pat) for pat in _IGNORE):
                 continue
@@ -190,24 +209,51 @@ def ensure_downloaded(key: str, on_progress: ProgressFn, is_cancelled) -> None:
     try:
         from huggingface_hub import snapshot_download
 
-        for r in repos:
-            if is_cancelled():
-                from .engines.base import EngineCancelled
+        if key == "supra_cover":
+            base = supra_cover_dir()
+            base.mkdir(parents=True, exist_ok=True)
+            for repo, folder in zip(repos, ("dit", "text", "vae")):
+                if is_cancelled():
+                    from .engines.base import EngineCancelled
 
-                raise EngineCancelled()
-            if key in _COPY_MODE:
-                local = llm_dir() if key == "llm" else cover_dir()
+                    raise EngineCancelled()
+                target = base / folder
+                target.mkdir(parents=True, exist_ok=True)
                 snapshot_download(
-                    r,
-                    local_dir=str(local),
+                    repo,
+                    local_dir=str(target),
                     ignore_patterns=_IGNORE,
-                    allow_patterns=_ALLOW.get(key),
+                    allow_patterns=_supra_allow(repo),
                 )
-            else:
-                snapshot_download(
-                    r, cache_dir=str(settings.HF_CACHE_DIR), ignore_patterns=_IGNORE
-                )
+        else:
+            for r in repos:
+                if is_cancelled():
+                    from .engines.base import EngineCancelled
+
+                    raise EngineCancelled()
+                if key in _COPY_MODE:
+                    local = llm_dir() if key == "llm" else cover_dir()
+                    snapshot_download(
+                        r,
+                        local_dir=str(local),
+                        ignore_patterns=_IGNORE,
+                        allow_patterns=_ALLOW.get(key),
+                    )
+                else:
+                    snapshot_download(
+                        r, cache_dir=str(settings.HF_CACHE_DIR), ignore_patterns=_IGNORE
+                    )
     finally:
         stop.set()
         watcher.join(timeout=1)
     on_progress(1.0, 0.0, 0.0, total, total)
+
+
+def _supra_allow(repo: str) -> list[str]:
+    if repo == "SupraLabs/Supra2-IMG":
+        return ["config.json", "model_final_ema.pt"]
+    if repo == "google/flan-t5-base":
+        return ["*.json", "*.safetensors", "spiece.model"]
+    if repo == "stabilityai/sd-vae-ft-mse":
+        return ["*.json", "*.safetensors"]
+    return []

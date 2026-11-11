@@ -23,6 +23,7 @@ function JobRow({ job }: { job: Job }) {
   const showToast = useStore((s) => s.showToast);
   const tracks = useStore((s) => s.tracks);
   const playTrack = useStore((s) => s.playTrack);
+  const clearFinishedJobs = useStore((s) => s.clearFinishedJobs);
   const active = !["done", "error", "cancelled", "paused"].includes(job.status);
   const [now, setNow] = useState(() => Date.now() / 1000);
   const [busy, setBusy] = useState(false);
@@ -84,6 +85,15 @@ function JobRow({ job }: { job: Job }) {
             <Play size={14} />
           </button>
         ) : null}
+        {!active && job.status !== "paused" && (
+          <button
+            onClick={() => void clearFinishedJobs([job.id])}
+            className="rounded-md p-1 text-[var(--muted)] hover:bg-white/10 hover:text-white"
+            title="Remove from queue (the song stays in your Library)"
+          >
+            <X size={14} />
+          </button>
+        )}
       </div>
 
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
@@ -114,11 +124,27 @@ function JobRow({ job }: { job: Job }) {
 
 export function JobsList() {
   const jobs = useStore((s) => s.jobs);
+  const clearFinishedJobs = useStore((s) => s.clearFinishedJobs);
   const list = Object.values(jobs).sort((a, b) => b.created_at - a.created_at);
   if (list.length === 0) return null;
+  const finished = list.filter((j) => ["done", "error", "cancelled"].includes(j.status)).length;
 
   return (
     <div className="glass rounded-2xl p-3">
+      {finished > 0 && (
+        <div className="mb-2 flex items-center justify-between px-1">
+          <span className="text-[11px] text-[var(--muted)]">
+            {list.length} job{list.length === 1 ? "" : "s"}
+          </span>
+          <button
+            onClick={() => void clearFinishedJobs()}
+            title="Remove finished, failed and cancelled jobs. Songs stay in your Library; running and paused jobs are kept."
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-[var(--muted)] hover:bg-white/10 hover:text-white"
+          >
+            <X size={12} /> Clear finished ({finished})
+          </button>
+        </div>
+      )}
       <div className="space-y-2">
         {list.map((job) => (
           <JobRow key={job.id} job={job} />

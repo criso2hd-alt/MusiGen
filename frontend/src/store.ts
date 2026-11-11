@@ -130,6 +130,7 @@ interface State {
   engine: string; // currently selected engine
   engines: EngineInfo[];
   models: Record<string, ModelStatus>;
+  coverModel: string;
   llm: LlmOptions | null;
   ollama: boolean;
   catalog: PillCatalog | null;
@@ -208,6 +209,8 @@ interface State {
   ingestModel: (m: ModelStatus) => void;
   fetchLlmOptions: () => Promise<void>;
   selectLlm: (model: string) => Promise<void>;
+  fetchCoverOptions: () => Promise<void>;
+  selectCoverModel: (model: string) => Promise<void>;
   addPill: (category: Pill["category"], label: string) => void;
   removePill: (id: string) => void;
   setPillWeight: (id: string, weight: number) => void;
@@ -224,6 +227,8 @@ interface State {
   generate: () => Promise<void>;
   cancelJob: (id: string) => void;
   ingestJob: (job: Job) => void;
+  removeJobs: (ids: string[]) => void;
+  clearFinishedJobs: (ids?: string[]) => Promise<void>;
   ingestTrack: (track: Track) => void;
   refreshTracks: () => Promise<void>;
   refreshPlaylists: () => Promise<void>;
@@ -281,6 +286,7 @@ export const useStore = create<State>((set, get) => ({
   engine: "stub",
   engines: [],
   models: {},
+  coverModel: "sd-turbo",
   llm: null,
   ollama: false,
   catalog: null,
@@ -338,7 +344,7 @@ export const useStore = create<State>((set, get) => ({
 
   init: async () => {
     applyTheme(get().themeColors);
-    const [health, catalog, tracks, playlists, engines, models, llm] =
+    const [health, catalog, tracks, playlists, engines, models, llm, coverOptions] =
       await Promise.all([
         api.health().catch(() => ({ engine: "stub", ollama: false })),
         api.pills().catch(() => null),
@@ -347,6 +353,7 @@ export const useStore = create<State>((set, get) => ({
         api.engines().catch(() => [] as EngineInfo[]),
         api.models().catch(() => ({} as Record<string, ModelStatus>)),
         api.llmOptions().catch(() => null),
+        api.coverOptions().catch(() => null),
       ]);
     // choose selected engine: persisted (if ready) → backend default → first ready
     const saved = ls.get("mg.engine", "");
@@ -360,6 +367,7 @@ export const useStore = create<State>((set, get) => ({
       engine: pick,
       engines,
       models,
+      coverModel: coverOptions?.selected ?? "sd-turbo",
       llm,
       ollama: health.ollama,
       catalog,
@@ -410,6 +418,14 @@ export const useStore = create<State>((set, get) => ({
   fetchLlmOptions: async () => {
     const llm = await api.llmOptions().catch(() => null);
     if (llm) set({ llm });
+  },
+  fetchCoverOptions: async () => {
+    const options = await api.coverOptions().catch(() => null);
+    if (options) set({ coverModel: options.selected });
+  },
+  selectCoverModel: async (model) => {
+    const options = await api.selectCoverModel(model);
+    set({ coverModel: options.selected });
   },
   selectLlm: async (model) => {
     const llm = await api.selectLlm(model);
@@ -505,6 +521,22 @@ export const useStore = create<State>((set, get) => ({
   ingestJob: (job) =>
     set((s) => ({ jobs: { ...s.jobs, [job.id]: job } })),
 
+  removeJobs: (ids) =>
+    set((s) => {
+      const jobs = { ...s.jobs };
+      ids.forEach((id) => delete jobs[id]);
+      return { jobs };
+    }),
+
+  clearFinishedJobs: async (ids) => {
+    try {
+      const r = await api.clearJobs(ids);
+      get().removeJobs(r.cleared);
+    } catch (e) {
+      get().showToast(`Couldn't clear the queue: ${String(e).slice(0, 120)}`, "err");
+    }
+  },
+
   ingestTrack: (track) =>
     set((s) => ({ tracks: [track, ...s.tracks.filter((t) => t.id !== track.id)], current: s.current?.id === track.id ? track : s.current })),
 
@@ -571,7 +603,8 @@ export const useStore = create<State>((set, get) => ({
 
   generateCover: async (trackId) => {
     if (get().coverBusy[trackId]) return;
-    if (!get().models.cover?.ready) {
+    const coverKey = get().coverModel === "supra2-img" ? "supra_cover" : "cover";
+    if (!get().models[coverKey]?.ready) {
       get().showToast("Download the Cover model in Setup first", "err");
       return;
     }

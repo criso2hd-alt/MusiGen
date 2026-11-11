@@ -21,6 +21,7 @@ export function useJobSocket() {
           if (msg.type === "job") ingestJob(msg.job);
           else if (msg.type === "track") ingestTrack(msg.track);
           else if (msg.type === "model") ingestModel(msg.model);
+          else if (msg.type === "jobs_cleared" && Array.isArray(msg.ids)) useStore.getState().removeJobs(msg.ids);
         } catch {
           /* ignore */
         }

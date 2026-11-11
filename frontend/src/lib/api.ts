@@ -35,6 +35,12 @@ export const api = {
   system: () => fetch("/api/system").then((r) => j<SystemStatus>(r)),
   pauseJob: (id: string) => fetch(`/api/jobs/${id}/pause`, { method: "POST" }).then((r) => j(r)),
   resumeJob: (id: string) => fetch(`/api/jobs/${id}/resume`, { method: "POST" }).then((r) => j(r)),
+  clearJobs: (ids?: string[]) =>
+    fetch("/api/jobs/clear", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(ids ? { ids } : {}),
+    }).then((r) => j<{ cleared: string[] }>(r)),
   health: () => fetch("/api/health").then((r) => j<any>(r)),
 
   pills: () => fetch("/api/pills").then((r) => j<PillCatalog>(r)),
@@ -64,6 +70,10 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model }),
     }).then((r) => j<LlmOptions>(r)),
+  coverOptions: () => fetch("/api/cover/options").then((r) => j<{ selected: string; options: { key: string; label: string; engine: string; ready: boolean; size: string; note: string }[] }>(r)),
+  selectCoverModel: (selected: string) => fetch("/api/cover/options", {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ selected }),
+  }).then((r) => j<{ selected: string; options: { key: string; label: string; engine: string; ready: boolean; size: string; note: string }[] }>(r)),
 
   // fire-and-forget: the server dies mid-response, so ignore errors
   shutdown: () =>

@@ -262,20 +262,94 @@ def start_setup_server() -> int:
 
 
 def _run(cmd: list[str]) -> None:
+    # uv prints UTF-8; decode it as such (cp1252 would choke on non-ASCII paths).
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         creationflags=CREATE_NO_WINDOW,
     )
+    tail: list[str] = []
     for line in proc.stdout:  # type: ignore[union-attr]
         line = line.strip()
         if line:
+            tail = (tail + [line])[-3:]
             set_state(message=line[:120])
     proc.wait()
     if proc.returncode != 0:
-        raise RuntimeError(f"command failed ({proc.returncode}): {' '.join(cmd[:2])}")
+        detail = f" — {tail[-1][:200]}" if tail else ""
+        raise RuntimeError(f"command failed ({proc.returncode}): {' '.join(cmd[:2])}{detail}")
+
+
+def _portable_env(home: Path) -> None:
+    """Keep uv's Python interpreters and package cache INSIDE the app folder, and
+    run every child process in UTF-8 mode. Nothing then depends on drive C:, so
+    the app survives systems that revert C: on reboot (e.g. Shadow Defender), and
+    non-Latin-1 lyrics (Romanian ș/ț, etc.) don't hit Windows' cp1252 default."""
+    os.environ["UV_SYSTEM_CERTS"] = "1"
+    os.environ["UV_PYTHON_PREFERENCE"] = "only-managed"
+    os.environ["UV_PYTHON_INSTALL_DIR"] = str(home / "python")
+    os.environ["UV_CACHE_DIR"] = str(home / "downloads" / "uv-cache")
+    os.environ["PYTHONUTF8"] = "1"
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+
+
+def _runtime_base(home: Path) -> Path | None:
+    """The base interpreter folder the runtime venv was built from (pyvenv.cfg)."""
+    cfg = home / "runtime" / "pyvenv.cfg"
+    try:
+        for line in cfg.read_text(encoding="utf-8", errors="replace").splitlines():
+            key, _, value = line.partition("=")
+            if key.strip().lower() == "home":
+                return Path(value.strip())
+    except OSError:
+        pass
+    return None
+
+
+def _runtime_runs(home: Path) -> bool:
+    """True when the runtime's python.exe actually starts."""
+    py = home / "runtime" / "Scripts" / "python.exe"
+    if not py.exists():
+        return False
+    try:
+        ok = subprocess.run([str(py), "-c", "import sys"], timeout=60,
+                            capture_output=True, creationflags=CREATE_NO_WINDOW)
+        return ok.returncode == 0
+    except Exception:
+        return False
+
+
+def _runtime_portable(home: Path) -> bool:
+    """True when the runtime's base Python lives in the app folder and launches."""
+    base = _runtime_base(home)
+    if base is None or not base.exists():
+        return False
+    try:
+        base.resolve().relative_to(home.resolve())
+    except ValueError:
+        return False  # built from a Python outside the app folder (e.g. on C:)
+    return _runtime_runs(home)
+
+
+def _uv_path(res: Path) -> Path:
+    uv = res / "uv.exe"
+    return uv if uv.exists() else res / "installer" / "vendor" / "uv.exe"  # dev layout
+
+
+def _make_portable(uv: Path, home: Path) -> bool:
+    """Rebase the runtime onto the in-folder Python IN PLACE. --allow-existing
+    rewrites the venv's launchers and config but keeps every installed package
+    (same CPython 3.12 ABI), so nothing is reinstalled. Needs a one-time ~30 MB
+    Python download the first time; returns False if that isn't possible now."""
+    try:
+        _run([str(uv), "venv", str(home / "runtime"), "--python", "3.12", "--allow-existing"])
+    except RuntimeError:
+        return False
+    return _runtime_portable(home)
 
 
 def _resolve_torch_wheel() -> str:
@@ -341,19 +415,28 @@ def run_setup(res: Path, home: Path) -> None:
         )
         return
 
-    uv = res / "uv.exe"
-    if not uv.exists():  # dev (non-frozen) layout
-        uv = res / "installer" / "vendor" / "uv.exe"
-    os.environ["UV_SYSTEM_CERTS"] = "1"
-    os.environ["UV_PYTHON_PREFERENCE"] = "system"
+    uv = _uv_path(res)
+    _portable_env(home)
     runtime = home / "runtime"
     py = runtime / "Scripts" / "python.exe"
 
-    # Reuse an existing Python environment when upgrading. Never clear it merely
-    # because the app's runtime marker changed.
+    # The runtime must be built from the self-contained CPython in <app>/python.
+    # Older builds used the system Python on C: (lost when C: reverts on reboot,
+    # e.g. Shadow Defender), and moving/renaming the app folder breaks a venv's
+    # absolute base path. Both are repaired IN PLACE with --allow-existing, which
+    # rewrites the venv's launchers and config but keeps every installed package
+    # (same CPython 3.12 ABI), so nothing is downloaded again. A full --clear
+    # rebuild is only the last resort.
     if not py.exists():
         set_state(phase="runtime", message="Creating the Python runtime…", percent=3)
         _run([str(uv), "venv", str(runtime), "--python", "3.12"])
+    elif not _runtime_portable(home):
+        set_state(phase="runtime", message="Making the Python runtime portable…", percent=3)
+        # Only rebuild from scratch when the runtime can neither be rebased nor
+        # still run as it is (e.g. its base Python on C: was wiped).
+        if not _make_portable(uv, home) and not _runtime_runs(home):
+            set_state(phase="runtime", message="Rebuilding the Python runtime…", percent=3)
+            _run([str(uv), "venv", str(runtime), "--python", "3.12", "--clear"])
 
     # 3) torch — download the wheel ourselves for real speed/ETA, then install it
     set_state(phase="torch", message="Resolving PyTorch…", percent=5)
@@ -406,6 +489,11 @@ def start_backend(res: Path, home: Path) -> str:
     env.setdefault("MUSIGEN_ENGINE", "yue2")
     env.setdefault("MUSIGEN_YUE2_BACKEND", "torch-eager")
     env["PYTHONPATH"] = str(res / "backend")
+    # UTF-8 mode for the backend and every worker it spawns: Windows defaults to
+    # cp1252, which crashed on Romanian/other lyrics ('charmap' codec can't encode
+    # 'Ș') inside the engine's checkpoint writer.
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
     with (home / "data" / "backend.log").open("ab") as log:
         _backend = subprocess.Popen(
             [str(runtime_py), str(res / "run_backend.py")],
@@ -441,7 +529,6 @@ def main() -> int:
     res = res_dir()
     home = app_dir()
     set_state(folder=str(home))
-    runtime_ready = (home / "runtime" / f".ready-{RUNTIME_TAG}").exists() and (home / "runtime" / "Scripts" / "python.exe").exists()
 
     def worker():
         try:
@@ -457,7 +544,21 @@ def main() -> int:
                     )
                 )
                 return
-            if not runtime_ready:
+            _portable_env(home)
+            set_state(phase="checking", message="Checking the runtime…", percent=1)
+            # Self-heal: a missing marker or a runtime that no longer starts (its
+            # base Python on C: was wiped, e.g. Shadow Defender reboot, or the app
+            # folder moved) runs setup, which repairs it, instead of failing with
+            # "backend did not start".
+            installed = (home / "runtime" / f".ready-{RUNTIME_TAG}").exists()
+            if installed and _runtime_runs(home):
+                if not _runtime_portable(home):
+                    # Working but tied to a Python outside this folder (older builds).
+                    # Rebase it in place; if that can't happen now (offline), keep
+                    # using it and try again next launch.
+                    set_state(phase="runtime", message="Making the Python runtime portable…", percent=3)
+                    _make_portable(_uv_path(res), home)
+            else:
                 run_setup(res, home)
                 if STATE["error"]:
                     return

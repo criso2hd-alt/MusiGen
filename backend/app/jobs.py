@@ -143,7 +143,7 @@ class JobManager:
         from . import model_manager
 
         out: dict = {}
-        for eng in ("yue2", "llm", "cover"):  # local-weight models
+        for eng in ("yue2", "llm", "cover", "supra_cover"):  # local-weight models
             st = self._model_dl.get(eng, {})
             out[eng] = {
                 "engine": eng,
@@ -270,6 +270,28 @@ class JobManager:
             job.message = "Cancellation requested; waiting for a safe interruption point"
             self._emit(job, force=True)
         return True
+
+    def clear_finished(self, ids: list[str] | None = None) -> list[str]:
+        """Remove finished (done/error/cancelled) jobs from the queue and delete
+        their journals so they don't reappear after a restart. Active, queued and
+        paused jobs are never touched. `ids` limits the clear to those jobs."""
+        finished = {JobStatus.done, JobStatus.error, JobStatus.cancelled}
+        wanted = set(ids) if ids else None
+        cleared: list[str] = []
+        for job_id, job in list(self.jobs.items()):
+            if job.status not in finished or (wanted is not None and job_id not in wanted):
+                continue
+            self.jobs.pop(job_id, None)
+            self._persisted_stage.pop(job_id, None)
+            self._cleanup(job_id)
+            if re.fullmatch(r"job_[a-f0-9]{12}", job_id):
+                (settings.DATA_DIR / "jobs" / f"{job_id}.json").unlink(missing_ok=True)
+            cleared.append(job_id)
+        if cleared and self._loop:
+            self._loop.call_soon_threadsafe(
+                self._publish, "*", {"type": "jobs_cleared", "ids": cleared}
+            )
+        return cleared
 
     def pause(self, job_id: str) -> bool:
         job = self.jobs.get(job_id)

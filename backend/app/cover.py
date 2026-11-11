@@ -1,4 +1,4 @@
-"""Local album-cover image generation with SD-Turbo (diffusers).
+"""Local album-cover image generation with SD-Turbo or experimental Supra2-IMG.
 
 GPU-shared with YuE2/LLM (one big model at a time). The pipeline is kept WARM in
 VRAM after the first render so subsequent covers are fast (~0.5-1s instead of a
@@ -18,8 +18,10 @@ _device: str | None = None
 
 def available() -> bool:
     from . import model_manager
+    from . import app_settings
 
-    return model_manager.is_ready("cover")
+    key = "supra_cover" if app_settings.get_cover_model() == "supra2-img" else "cover"
+    return model_manager.is_ready(key)
 
 
 def is_loaded() -> bool:
@@ -31,6 +33,12 @@ def unload() -> None:
     """Drop the resident SD-Turbo pipeline and free its VRAM."""
     global _pipe, _device
     with _lock:
+        try:
+            from . import supra_cover
+
+            supra_cover.unload()
+        except Exception:
+            pass
         if _pipe is None:
             return
         _pipe = None
@@ -48,6 +56,12 @@ def _ensure_pipe():
     global _pipe, _device
     if _pipe is not None:
         return
+    try:
+        from . import supra_cover
+
+        supra_cover.unload()
+    except Exception:
+        pass
     # Free the GPU from any resident music engine + lyric model first.
     try:
         from .engines import unload_all
@@ -106,8 +120,15 @@ def generate(
 
     Keeps the pipeline warm — the first call loads it, later calls reuse it.
     """
+    from . import app_settings
+
     if not available():
         raise RuntimeError("Cover model not downloaded")
+
+    if app_settings.get_cover_model() == "supra2-img":
+        from . import supra_cover
+
+        return supra_cover.generate(prompt, out_path, seed=seed)
 
     import torch
 
